@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>Feed Planner</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #000000;
+    --muted: #737373;
+    --line: #dbdbdb;
+    --chip: #efefef;
+    --chip-hover: #dbdbdb;
+    --sheet: #ffffff;
+    --accent: #0095f6;
+    --danger: #ed4956;
+    --badge: rgba(0, 0, 0, 0.62);
+    --backdrop: rgba(0, 0, 0, 0.45);
+    --ring: linear-gradient(45deg, #f9ce34, #ee2a7b 50%, #6228d7);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --fg: #f5f5f5;
+      --muted: #a8a8a8;
+      --line: #262626;
+      --chip: #262626;
+      --chip-hover: #363636;
+      --sheet: #1a1a1a;
+      --backdrop: rgba(0, 0, 0, 0.65);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  svg { display: block; }
+  [hidden] { display: none !important; }
+
+  .app {
+    max-width: 430px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    position: relative;
+  }
+  @media (min-width: 480px) {
+    .app { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  }
+
+  /* Top bar */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 8px;
+    height: 48px; padding: 0 16px;
+    padding-top: env(safe-area-inset-top);
+    box-sizing: content-box;
+    background: var(--bg);
+  }
+  .topbar .handle { font-size: 20px; font-weight: 700; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
+  .topbar .handle [contenteditable] { outline: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; }
+  .icon-btn:active { opacity: 0.5; }
+
+  /* Profile header */
+  .profile { padding: 4px 16px 0; }
+  .profile-top { display: flex; align-items: center; gap: 24px; }
+  .avatar-ring {
+    flex: none; width: 90px; height: 90px; border-radius: 50%;
+    padding: 3px; background: var(--ring); cursor: pointer;
+  }
+  .avatar {
+    width: 100%; height: 100%; border-radius: 50%;
+    border: 3px solid var(--bg); background: var(--chip) center/cover no-repeat;
+    display: grid; place-items: center; color: var(--muted);
+  }
+  .stats { flex: 1; display: flex; justify-content: space-around; text-align: center; }
+  .stat b { display: block; font-size: 17px; font-weight: 700; }
+  .stat span { font-size: 13px; }
+  .stat [contenteditable] { outline: none; }
+  .bio { margin-top: 10px; }
+  .bio .name { font-weight: 600; outline: none; }
+  .bio .text { white-space: pre-wrap; outline: none; min-height: 1.35em; }
+  [contenteditable]:empty::before { content: attr(data-placeholder); color: var(--muted); }
+  [contenteditable]:focus { background: var(--chip); border-radius: 4px; }
+  .actions { display: flex; gap: 6px; margin: 14px 0 10px; }
+  .btn {
+    flex: 1; height: 32px; border-radius: 8px; background: var(--chip);
+    font-weight: 600; font-size: 14px;
+  }
+  .btn:hover { background: var(--chip-hover); }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(0.95); }
+
+  /* Tabs */
+  .tabs { display: flex; border-top: 1px solid var(--line); position: sticky; top: calc(48px + env(safe-area-inset-top)); z-index: 15; background: var(--bg); }
+  .tab {
+    flex: 1; height: 44px; display: grid; place-items: center; color: var(--muted);
+    border-bottom: 1px solid transparent; margin-bottom: -1px;
+  }
+  .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+
+  /* Grid */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+  .tile {
+    position: relative; aspect-ratio: 4 / 5; background: var(--chip); overflow: hidden;
+    cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .tile .kind { position: absolute; top: 6px; right: 6px; color: #fff; filter: drop-shadow(0 0 2px rgba(0,0,0,.5)); }
+  .tile .when {
+    position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 4px;
+    background: var(--badge); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .1px;
+  }
+  .tile .when.posted { background: rgba(0, 149, 246, .85); }
+  .tile.add-tile {
+    display: grid; place-items: center; text-align: center; color: var(--muted);
+    background: transparent; outline: 1.5px dashed var(--line); outline-offset: -6px; font-size: 12px; font-weight: 600;
+  }
+  .tile.add-tile:hover { color: var(--fg); }
+
+  /* Drag state (shared by grid + list) */
+  .dragging-src { opacity: 0.25; }
+  .drag-ghost {
+    position: fixed; z-index: 100; pointer-events: none; margin: 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35); transform: scale(1.06); border-radius: 4px; overflow: hidden;
+    transition: transform .12s ease;
+  }
+  body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+
+  /* Empty state */
+  .empty { padding: 48px 32px; text-align: center; }
+  .empty-icon { width: 64px; height: 64px; margin: 0 auto 14px; border: 2px solid var(--fg); border-radius: 50%; display: grid; place-items: center; }
+  .empty h2 { font-size: 22px; margin: 0 0 6px; font-weight: 800; }
+  .empty p { margin: 0 0 18px; color: var(--muted); }
+  .empty .btn { flex: none; padding: 0 18px; }
+
+  /* Schedule */
+  .sched-settings { padding: 12px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+  .sched-settings .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sched-settings label { color: var(--muted); font-size: 13px; }
+  .field {
+    font: inherit; color: var(--fg); background: var(--chip); border: 0; border-radius: 8px;
+    height: 34px; padding: 0 10px; min-width: 0;
+  }
+  .field.num { width: 56px; text-align: center; }
+  .sched-hint { color: var(--muted); font-size: 12px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list-group { padding: 14px 16px 6px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .item {
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--bg);
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
+  }
+  .item:hover { background: color-mix(in srgb, var(--chip) 50%, transparent); }
+  .item .thumb { width: 52px; aspect-ratio: 4 / 5; border-radius: 4px; background: var(--chip) center/cover no-repeat; flex: none; position: relative; }
+  .item .thumb svg { position: absolute; top: 3px; right: 3px; color: #fff; filter: drop-shadow(0 0 2px rgba(0,0,0,.5)); }
+  .item .meta { flex: 1; min-width: 0; }
+  .item .date { font-weight: 600; }
+  .item .cap { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .num { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; width: 20px; text-align: right; flex: none; }
+  .item .grip { color: var(--muted); padding: 8px 0 8px 8px; cursor: grab; touch-action: none; }
+
+  /* Bottom nav */
+  .bottomnav {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); z-index: 20;
+    width: 100%; max-width: 430px; height: calc(50px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    display: flex; justify-content: space-around; align-items: center;
+    background: var(--bg); border-top: 1px solid var(--line);
+  }
+  .bottomnav .mini-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--chip) center/cover no-repeat; border: 2px solid var(--fg); }
+
+  /* Post sheet */
+  .backdrop {
+    position: fixed; inset: 0; z-index: 50; background: var(--backdrop);
+    display: flex; align-items: flex-end; justify-content: center;
+    animation: fade .15s ease;
+  }
+  .sheet {
+    width: 100%; max-width: 430px; max-height: 92dvh; overflow: auto;
+    background: var(--sheet); border-radius: 14px 14px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: up .2s ease;
+  }
+  .grabber { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto; }
+  .sheet-media { background: #000; display: grid; place-items: center; max-height: 46dvh; }
+  .sheet-media img, .sheet-media video { max-width: 100%; max-height: 46dvh; display: block; }
+  .sheet-body { padding: 12px 16px 16px; display: grid; gap: 12px; }
+  .sheet-when { font-weight: 600; }
+  .sheet-when small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .sheet textarea {
+    font: inherit; color: var(--fg); background: var(--chip); border: 0; border-radius: 8px;
+    padding: 10px; min-height: 76px; resize: vertical; width: 100%;
+  }
+  .switch-row { display: flex; align-items: center; justify-content: space-between; }
+  .switch { position: relative; width: 44px; height: 26px; flex: none; }
+  .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; }
+  .switch span { position: absolute; inset: 0; border-radius: 13px; background: var(--line); transition: background .15s; pointer-events: none; }
+  .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(18px); }
+  .sheet-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sheet-btns .btn { flex: 1 1 140px; padding: 0 10px; }
+  .btn.danger { color: var(--danger); background: transparent; }
+  .btn.danger:hover { background: var(--chip); }
+
+  /* Drop overlay + toast */
+  .drop-overlay {
+    position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    border: 3px dashed var(--accent); font-size: 18px; font-weight: 700; color: var(--accent);
+    pointer-events: none;
+  }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(66px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    z-index: 70; background: #262626; color: #fff; padding: 10px 14px; border-radius: 8px;
+    font-size: 13px; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  }
+
+  @keyframes fade { from { opacity: 0; } }
+  @keyframes up { from { transform: translateY(40px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="handle">
+      <span id="username" contenteditable="plaintext-only" spellcheck="false" data-placeholder="username"></span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+    <button class="icon-btn" id="addTop" aria-label="Add posts">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+    </button>
+  </header>
+
+  <section class="profile">
+    <div class="profile-top">
+      <div class="avatar-ring" id="avatarBtn" title="Change profile photo">
+        <div class="avatar" id="avatar">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b id="postCount">0</b><span>posts</span></div>
+        <div class="stat"><b id="followers" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0"></b><span>followers</span></div>
+        <div class="stat"><b id="following" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0"></b><span>following</span></div>
+      </div>
+    </div>
+    <div class="bio">
+      <div class="name" id="displayName" contenteditable="plaintext-only" data-placeholder="Display name"></div>
+      <div class="text" id="bioText" contenteditable="plaintext-only" data-placeholder="Write a bio…"></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="addBtn">Add posts</button>
+      <button class="btn" id="schedBtn">Schedule</button>
+    </div>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="grid" aria-selected="true" aria-label="Grid">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+    </button>
+    <button class="tab" role="tab" data-tab="schedule" aria-selected="false" aria-label="Schedule">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    </button>
+  </nav>
+
+  <main>
+    <section id="gridView">
+      <div class="grid" id="grid"></div>
+      <div class="empty" id="empty" hidden>
+        <div class="empty-icon">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </div>
+        <h2>Plan your feed</h2>
+        <p>Add photos and videos, then drag them around until the grid looks right. The order sets your posting schedule.</p>
+        <button class="btn primary" id="addEmpty">Add photos &amp; videos</button>
+      </div>
+    </section>
+
+    <section id="scheduleView" hidden>
+      <div class="sched-settings">
+        <div class="row">
+          <label for="startDate">Start</label>
+          <input class="field" type="date" id="startDate">
+          <label for="postTime">at</label>
+          <input class="field" type="time" id="postTime">
+        </div>
+        <div class="row">
+          <label for="everyDays">Post every</label>
+          <input class="field num" type="number" id="everyDays" min="1" max="60" step="1">
+          <label for="everyDays">day(s)</label>
+        </div>
+        <div class="sched-hint">The bottom of your grid posts first. Drag here or in the grid to reshuffle; dates follow the order.</div>
+      </div>
+      <ul class="list" id="schedList"></ul>
+      <div class="empty" id="schedEmpty" hidden><p>Nothing scheduled yet. Add posts and they'll show up here in posting order.</p></div>
+    </section>
+  </main>
+
+  <nav class="bottomnav" aria-label="App">
+    <button class="icon-btn" aria-label="Home" data-scroll-top>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V21h-6v-6H9v6H3z"/></svg>
+    </button>
+    <button class="icon-btn" aria-label="Schedule" data-goto="schedule">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    </button>
+    <button class="icon-btn" aria-label="Add posts" id="addNav">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+    </button>
+    <button class="icon-btn" aria-label="Grid" data-goto="grid">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 8h18M8 3l3 5M14 3l3 5M10 12v6l5-3z"/></svg>
+    </button>
+    <button class="icon-btn" aria-label="Profile" data-scroll-top>
+      <span class="mini-avatar" id="miniAvatar"></span>
+    </button>
+  </nav>
+</div>
+
+<div class="backdrop" id="sheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Post details">
+    <div class="grabber"></div>
+    <div class="sheet-media" id="sheetMedia"></div>
+    <div class="sheet-body">
+      <div class="sheet-when" id="sheetWhen"></div>
+      <textarea id="sheetCaption" placeholder="Write a caption or notes…"></textarea>
+      <div class="switch-row">
+        <span>Already posted</span>
+        <label class="switch"><input type="checkbox" id="sheetPosted"><span></span></label>
+      </div>
+      <div class="sheet-btns">
+        <button class="btn" id="frameBtn">Set cover from this frame</button>
+        <button class="btn" id="thumbBtn">Upload thumbnail</button>
+        <button class="btn" id="resetThumbBtn">Reset thumbnail</button>
+      </div>
+      <div class="sheet-btns">
+        <button class="btn danger" id="deleteBtn">Delete post</button>
+        <button class="btn" id="closeBtn">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="drop-overlay" id="dropOverlay" hidden>Drop photos &amp; videos to add</div>
+<div class="toast" id="toast" hidden></div>
+
+<input type="file" id="fileInput" accept="image/*,video/*" multiple hidden>
+<input type="file" id="avatarInput" accept="image/*" hidden>
+<input type="file" id="thumbInput" accept="image/*" hidden>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-reel" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm5 6v7l6-3.5z"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 8h14M5 12h14M5 16h14"/></symbol>
+</svg>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Storage (IndexedDB: media blobs + small settings) ----------
+  const store = (() => {
+    let dbPromise = null;
+    function open() {
+      if (!dbPromise) {
+        dbPromise = new Promise((resolve, reject) => {
+          const req = indexedDB.open('feed-planner', 1);
+          req.onupgradeneeded = () => {
+            req.result.createObjectStore('posts', { keyPath: 'id' });
+            req.result.createObjectStore('kv');
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+      return dbPromise;
+    }
+    async function run(name, mode, fn) {
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(name, mode);
+        const req = fn(tx.objectStore(name));
+        tx.oncomplete = () => resolve(req ? req.result : undefined);
+        tx.onerror = tx.onabort = () => reject(tx.error);
+      });
+    }
+    return {
+      allPosts: () => run('posts', 'readonly', s => s.getAll()),
+      putPost: p => run('posts', 'readwrite', s => s.put(p)),
+      deletePost: id => run('posts', 'readwrite', s => s.delete(id)),
+      get: k => run('kv', 'readonly', s => s.get(k)),
+      set: (k, v) => run('kv', 'readwrite', s => s.put(v, k)),
+    };
+  })();
+
+  let saveWarned = false;
+  function persist(promise) {
+    promise.catch(() => {
+      if (!saveWarned) { saveWarned = true; toast("Couldn't save in this browser. Changes will be lost on refresh."); }
+    });
+  }
+
+  // ---------- State ----------
+  const posts = new Map();     // id -> { id, type, media, thumb, caption, posted, created }
+  let order = [];              // grid order, index 0 = top-left (newest)
+  let profile = { username: 'yourbrand', name: '', bio: '', followers: '', following: '' };
+  let schedule = { start: todayISO(), time: '18:00', every: 1 };
+  let avatarBlob = null;
+  const urls = new Map();      // blob -> object URL cache
+  let openId = null;
+
+  function todayISO() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  function urlFor(blob) {
+    if (!blob) return '';
+    let u = urls.get(blob);
+    if (!u) { u = URL.createObjectURL(blob); urls.set(blob, u); }
+    return u;
+  }
+  function dropUrl(blob) {
+    const u = urls.get(blob);
+    if (u) { URL.revokeObjectURL(u); urls.delete(blob); }
+  }
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+  // ---------- Schedule math ----------
+  // Unposted posts go out bottom-of-grid first. Slot i = start + i * every days.
+  function queue() {
+    return order.filter(id => !posts.get(id).posted).reverse();
+  }
+  function scheduleDates() {
+    const map = new Map();
+    const [y, m, d] = (schedule.start || todayISO()).split('-').map(Number);
+    const [hh, mm] = (schedule.time || '18:00').split(':').map(Number);
+    const every = Math.max(1, Number(schedule.every) || 1);
+    queue().forEach((id, i) => map.set(id, new Date(y, m - 1, d + i * every, hh, mm)));
+    return map;
+  }
+  const fmtShort = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+  const fmtLong = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const fmtTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+
+  // ---------- Thumbnails ----------
+  function canvasToBlob(canvas) {
+    return new Promise(res => canvas.toBlob(b => res(b), 'image/jpeg', 0.85));
+  }
+  function drawScaled(source, w, h, max = 720) {
+    const scale = Math.min(1, max / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+    return canvasToBlob(c);
+  }
+  async function imageThumb(blob) {
+    try {
+      const bmp = await createImageBitmap(blob);
+      const out = await drawScaled(bmp, bmp.width, bmp.height);
+      bmp.close && bmp.close();
+      return out || blob;
+    } catch { return blob; } // e.g. HEIC the browser can't decode: show original
+  }
+  function videoThumb(blob, atTime) {
+    return new Promise(resolve => {
+      const v = document.createElement('video');
+      const src = URL.createObjectURL(blob);
+      let done = false;
+      const finish = out => { if (done) return; done = true; URL.revokeObjectURL(src); v.removeAttribute('src'); v.load(); resolve(out); };
+      setTimeout(() => finish(null), 8000);
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      v.onloadeddata = () => {
+        const t = atTime != null ? atTime : Math.min(0.5, (v.duration || 1) / 2);
+        if (Math.abs(v.currentTime - t) < 0.01) v.onseeked(); else v.currentTime = t;
+      };
+      v.onseeked = async () => finish(await drawScaled(v, v.videoWidth, v.videoHeight));
+      v.onerror = () => finish(null);
+      v.src = src;
+    });
+  }
+
+  // ---------- Adding posts ----------
+  async function addFiles(fileList) {
+    const files = [...fileList].filter(f => /^(image|video)\//.test(f.type));
+    if (!files.length) { toast('Only photos and videos can be added.'); return; }
+    toast(`Adding ${files.length} ${files.length === 1 ? 'post' : 'posts'}…`, 60000);
+    const created = [];
+    for (const f of files) {
+      const type = f.type.startsWith('video/') ? 'video' : 'image';
+      const thumb = type === 'video' ? await videoThumb(f) : await imageThumb(f);
+      const p = { id: uid(), type, media: f, thumb, caption: '', posted: false, created: Date.now() };
+      posts.set(p.id, p);
+      created.push(p.id);
+      persist(store.putPost(p));
+    }
+    // The first file you picked posts first, so it sits lowest among the new ones.
+    order = created.reverse().concat(order);
+    saveOrder();
+    render();
+    toast(`Added ${files.length}. Drag tiles to rearrange.`);
+  }
+  function saveOrder() { persist(store.set('order', order)); }
+
+  // ---------- Rendering ----------
+  const $ = id => document.getElementById(id);
+  const gridEl = $('grid');
+  const listEl = $('schedList');
+  const reelIcon = '<svg width="18" height="18"><use href="#i-reel"/></svg>';
+
+  function render() {
+    const dates = scheduleDates();
+    $('postCount').textContent = posts.size;
+    $('empty').hidden = posts.size > 0;
+
+    gridEl.innerHTML = '';
+    for (const id of order) {
+      const p = posts.get(id);
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.dataset.id = id;
+      const when = dates.get(id);
+      tile.innerHTML =
+        (p.thumb ? `<img alt="" draggable="false" src="${urlFor(p.thumb)}">` : '') +
+        (p.type === 'video' ? `<span class="kind">${reelIcon}</span>` : '') +
+        (p.posted ? '<span class="when posted">Live</span>' : when ? `<span class="when">${fmtShort.format(when)}</span>` : '');
+      gridEl.appendChild(tile);
+    }
+    if (posts.size) {
+      const add = document.createElement('button');
+      add.className = 'tile add-tile';
+      add.dataset.add = '1';
+      add.innerHTML = '<span>+<br>Add</span>';
+      gridEl.appendChild(add);
+    }
+
+    listEl.innerHTML = '';
+    const q = queue();
+    $('schedEmpty').hidden = q.length > 0;
+    q.forEach((id, i) => {
+      const p = posts.get(id);
+      const d = dates.get(id);
+      const li = document.createElement('li');
+      li.className = 'item';
+      li.dataset.id = id;
+      li.innerHTML =
+        `<span class="num">${i + 1}</span>` +
+        `<span class="thumb" style="background-image:url('${urlFor(p.thumb)}')">${p.type === 'video' ? reelIcon.replace(/18/g, '14') : ''}</span>` +
+        `<span class="meta"><div class="date">${fmtLong.format(d)} · ${fmtTime.format(d)}</div><div class="cap"></div></span>` +
+        `<span class="grip" aria-label="Drag to reorder"><svg width="20" height="20"><use href="#i-grip"/></svg></span>`;
+      li.querySelector('.cap').textContent = p.caption || (p.type === 'video' ? 'Reel' : 'Photo');
+      listEl.appendChild(li);
+    });
+    const live = order.filter(id => posts.get(id).posted).length;
+    if (live) {
+      const g = document.createElement('li');
+      g.className = 'list-group';
+      g.textContent = `${live} already posted`;
+      listEl.appendChild(g);
+    }
+
+    if (openId) fillSheetWhen();
+  }
+
+  function renderProfile() {
+    $('username').textContent = profile.username;
+    $('displayName').textContent = profile.name;
+    $('bioText').textContent = profile.bio;
+    $('followers').textContent = profile.followers;
+    $('following').textContent = profile.following;
+    renderAvatar();
+  }
+  function renderAvatar() {
+    const av = $('avatar');
+    if (avatarBlob) {
+      av.style.backgroundImage = `url('${urlFor(avatarBlob)}')`;
+      av.innerHTML = '';
+      $('miniAvatar').style.backgroundImage = `url('${urlFor(avatarBlob)}')`;
+    }
+  }
+  function renderScheduleInputs() {
+    $('startDate').value = schedule.start;
+    $('postTime').value = schedule.time;
+    $('everyDays').value = schedule.every;
+  }
+
+  // ---------- Drag to reorder (pointer events; works with mouse + touch) ----------
+  // Mouse: drag starts after a few pixels. Touch: press and hold briefly, so normal scrolling still works.
+  function makeSortable(container, itemSelector, { handleSelector, onEnd }) {
+    let pending = null, drag = null, suppressClick = false;
+
+    container.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      const item = e.target.closest(itemSelector);
+      if (!item || !container.contains(item)) return;
+      const onHandle = handleSelector && e.target.closest(handleSelector);
+      pending = { item, x: e.clientX, y: e.clientY, id: e.pointerId, touch: e.pointerType !== 'mouse' };
+      if (pending.touch) {
+        // Grip handles start right away; anywhere else needs a short hold.
+        if (onHandle) start(e);
+        else pending.timer = setTimeout(() => pending && start(pending), 220);
+      }
+    });
+
+    window.addEventListener('pointermove', e => {
+      if (drag) { e.preventDefault(); move(e); return; }
+      if (!pending || e.pointerId !== pending.id) return;
+      const dist = Math.hypot(e.clientX - pending.x, e.clientY - pending.y);
+      if (pending.touch) { if (dist > 8) cancelPending(); }
+      else if (dist > 5) start(e);
+    }, { passive: false });
+
+    // Once a touch drag is live, stop the page from scrolling underneath it.
+    window.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    container.addEventListener('contextmenu', e => { if (e.target.closest(itemSelector)) e.preventDefault(); });
+    container.addEventListener('click', e => {
+      if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false; }
+    }, true);
+
+    function cancelPending() { if (pending) { clearTimeout(pending.timer); pending = null; } }
+
+    function start(e) {
+      const { item } = pending;
+      clearTimeout(pending.timer);
+      const r = item.getBoundingClientRect();
+      const ghost = item.cloneNode(true);
+      ghost.classList.add('drag-ghost');
+      Object.assign(ghost.style, { width: r.width + 'px', height: r.height + 'px', left: r.left + 'px', top: r.top + 'px' });
+      document.body.appendChild(ghost);
+      item.classList.add('dragging-src');
+      document.body.classList.add('is-dragging');
+      drag = { item, ghost, dx: pending.x - r.left, dy: pending.y - r.top, lastX: pending.x, lastY: pending.y };
+      pending = null;
+      if (navigator.vibrate) try { navigator.vibrate(10); } catch {}
+      move({ clientX: e.clientX ?? e.x, clientY: e.clientY ?? e.y });
+      autoScroll();
+    }
+
+    function move(e) {
+      drag.lastX = e.clientX; drag.lastY = e.clientY;
+      drag.ghost.style.left = (e.clientX - drag.dx) + 'px';
+      drag.ghost.style.top = (e.clientY - drag.dy) + 'px';
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const target = under && under.closest(itemSelector);
+      if (!target || target === drag.item || target._flipping || !container.contains(target)) return;
+      const items = [...container.querySelectorAll(itemSelector)];
+      const from = items.indexOf(drag.item), to = items.indexOf(target);
+      flip(items, () => target.insertAdjacentElement(to > from ? 'afterend' : 'beforebegin', drag.item));
+    }
+
+    function autoScroll() {
+      if (!drag) return;
+      const edge = 70, y = drag.lastY, h = window.innerHeight;
+      if (y < edge + 90) window.scrollBy(0, -Math.ceil((edge + 90 - y) / 6));
+      else if (y > h - edge - 50) window.scrollBy(0, Math.ceil((y - (h - edge - 50)) / 6));
+      drag.raf = requestAnimationFrame(() => { if (drag) { move({ clientX: drag.lastX, clientY: drag.lastY }); autoScroll(); } });
+    }
+
+    function end() {
+      cancelPending();
+      if (!drag) return;
+      cancelAnimationFrame(drag.raf);
+      drag.ghost.remove();
+      drag.item.classList.remove('dragging-src');
+      document.body.classList.remove('is-dragging');
+      drag = null;
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 400);
+      onEnd([...container.querySelectorAll(itemSelector)].map(el => el.dataset.id));
+    }
+
+    // Smoothly slide the other items into their new spots.
+    function flip(items, mutate) {
+      const before = new Map(items.map(el => [el, el.getBoundingClientRect()]));
+      mutate();
+      for (const el of items) {
+        if (el === drag.item) continue;
+        const a = before.get(el), b = el.getBoundingClientRect();
+        const dx = a.left - b.left, dy = a.top - b.top;
+        if (!dx && !dy) continue;
+        // Ignore items while they slide, or the pointer would bounce them straight back.
+        el._flipping = true;
+        clearTimeout(el._flipTimer);
+        el._flipTimer = setTimeout(() => { el._flipping = false; }, 200);
+        el.style.transition = 'none';
+        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        requestAnimationFrame(() => {
+          el.style.transition = 'transform .18s ease';
+          el.style.transform = '';
+        });
+      }
+    }
+  }
+
+  makeSortable(gridEl, '.tile[data-id]', {
+    onEnd(ids) { order = ids; saveOrder(); render(); },
+  });
+  makeSortable(listEl, '.item', {
+    handleSelector: '.grip',
+    onEnd(newQueue) {
+      // Put the new posting order back into the unposted slots of the grid.
+      const reversed = newQueue.slice().reverse();
+      let k = 0;
+      order = order.map(id => (posts.get(id).posted ? id : reversed[k++]));
+      saveOrder(); render();
+    },
+  });
+
+  // ---------- Post sheet ----------
+  function openSheet(id) {
+    const p = posts.get(id);
+    if (!p) return;
+    openId = id;
+    const media = $('sheetMedia');
+    media.innerHTML = '';
+    if (p.type === 'video') {
+      const v = document.createElement('video');
+      v.src = urlFor(p.media); v.controls = true; v.playsInline = true; v.loop = true;
+      if (p.thumb) v.poster = urlFor(p.thumb);
+      media.appendChild(v);
+    } else {
+      const img = document.createElement('img');
+      img.src = urlFor(p.media); img.alt = '';
+      img.onerror = () => { img.onerror = null; img.src = urlFor(p.thumb); };
+      media.appendChild(img);
+    }
+    $('sheetCaption').value = p.caption;
+    $('sheetPosted').checked = p.posted;
+    $('frameBtn').hidden = p.type !== 'video';
+    fillSheetWhen();
+    $('sheet').hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function fillSheetWhen() {
+    const p = posts.get(openId);
+    if (!p) return;
+    const el = $('sheetWhen');
+    if (p.posted) { el.innerHTML = 'Live on your profile<small>Not part of the schedule</small>'; return; }
+    const d = scheduleDates().get(openId);
+    const n = queue().indexOf(openId) + 1;
+    el.innerHTML = `${fmtLong.format(d)} at ${fmtTime.format(d)}<small>Post #${n} in the queue · drag the tile to change</small>`;
+  }
+  function closeSheet() {
+    const v = $('sheetMedia').querySelector('video');
+    if (v) v.pause();
+    $('sheet').hidden = true;
+    $('sheetMedia').innerHTML = '';
+    document.body.style.overflow = '';
+    openId = null;
+  }
+  function savePost(p) { persist(store.putPost(p)); }
+  function setThumb(p, blob) {
+    if (p.thumb && p.thumb !== p.media) dropUrl(p.thumb);
+    p.thumb = blob;
+    savePost(p);
+    render();
+    const v = $('sheetMedia').querySelector('video');
+    if (v && blob) v.poster = urlFor(blob);
+  }
+
+  $('sheetCaption').addEventListener('input', e => {
+    const p = posts.get(openId); if (!p) return;
+    p.caption = e.target.value; savePost(p); render();
+  });
+  $('sheetPosted').addEventListener('change', e => {
+    const p = posts.get(openId); if (!p) return;
+    p.posted = e.target.checked; savePost(p); render();
+  });
+  $('frameBtn').addEventListener('click', async () => {
+    const p = posts.get(openId);
+    const v = $('sheetMedia').querySelector('video');
+    if (!p || !v || !v.videoWidth) { toast('Play or scrub the video to the frame you want first.'); return; }
+    v.pause();
+    const blob = await drawScaled(v, v.videoWidth, v.videoHeight);
+    if (blob) { setThumb(p, blob); toast('Cover updated.'); }
+  });
+  $('thumbBtn').addEventListener('click', () => $('thumbInput').click());
+  $('thumbInput').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    const p = posts.get(openId);
+    if (!f || !p) return;
+    setThumb(p, await imageThumb(f));
+    toast('Thumbnail updated.');
+  });
+  $('resetThumbBtn').addEventListener('click', async () => {
+    const p = posts.get(openId); if (!p) return;
+    setThumb(p, p.type === 'video' ? await videoThumb(p.media) : await imageThumb(p.media));
+    toast('Thumbnail reset.');
+  });
+  $('deleteBtn').addEventListener('click', () => {
+    const p = posts.get(openId); if (!p) return;
+    if (!confirm('Delete this post from the planner?')) return;
+    closeSheet();
+    dropUrl(p.thumb); dropUrl(p.media);
+    posts.delete(p.id);
+    order = order.filter(id => id !== p.id);
+    persist(store.deletePost(p.id));
+    saveOrder(); render();
+  });
+  $('closeBtn').addEventListener('click', closeSheet);
+  $('sheet').addEventListener('click', e => { if (e.target === e.currentTarget) closeSheet(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+
+  // ---------- Wiring ----------
+  const pick = () => $('fileInput').click();
+  ['addTop', 'addBtn', 'addEmpty', 'addNav'].forEach(id => $(id).addEventListener('click', pick));
+  $('fileInput').addEventListener('change', e => { const f = e.target.files; if (f.length) addFiles([...f]); e.target.value = ''; });
+
+  gridEl.addEventListener('click', e => {
+    if (e.target.closest('[data-add]')) return pick();
+    const tile = e.target.closest('.tile[data-id]');
+    if (tile) openSheet(tile.dataset.id);
+  });
+  listEl.addEventListener('click', e => {
+    if (e.target.closest('.grip')) return;
+    const item = e.target.closest('.item');
+    if (item) openSheet(item.dataset.id);
+  });
+
+  function setTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === tab)));
+    $('gridView').hidden = tab !== 'grid';
+    $('scheduleView').hidden = tab !== 'schedule';
+    try { localStorage.setItem('feed-planner-tab', tab); } catch {}
+  }
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
+  document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.goto)));
+  document.querySelectorAll('[data-scroll-top]').forEach(b => b.addEventListener('click', () => { setTab('grid'); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
+  $('schedBtn').addEventListener('click', () => setTab('schedule'));
+
+  // Profile editing
+  const profileFields = { username: 'username', displayName: 'name', bioText: 'bio', followers: 'followers', following: 'following' };
+  let profileTimer;
+  for (const [elId, key] of Object.entries(profileFields)) {
+    const el = $(elId);
+    el.addEventListener('input', () => {
+      profile[key] = el.textContent;
+      clearTimeout(profileTimer);
+      profileTimer = setTimeout(() => persist(store.set('profile', profile)), 300);
+    });
+    if (key !== 'bio') el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+  }
+  $('avatarBtn').addEventListener('click', () => $('avatarInput').click());
+  $('avatarInput').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    if (avatarBlob) dropUrl(avatarBlob);
+    avatarBlob = await imageThumb(f);
+    persist(store.set('avatar', avatarBlob));
+    renderAvatar();
+  });
+
+  // Schedule settings
+  function onScheduleChange() {
+    schedule = {
+      start: $('startDate').value || todayISO(),
+      time: $('postTime').value || '18:00',
+      every: Math.min(60, Math.max(1, parseInt($('everyDays').value, 10) || 1)),
+    };
+    persist(store.set('schedule', schedule));
+    render();
+  }
+  ['startDate', 'postTime', 'everyDays'].forEach(id => $(id).addEventListener('change', onScheduleChange));
+
+  // Drag files from your computer onto the page
+  let dragDepth = 0;
+  const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  window.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('dropOverlay').hidden = false; });
+  window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener('dragleave', e => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; $('dropOverlay').hidden = true; } });
+  window.addEventListener('drop', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); dragDepth = 0; $('dropOverlay').hidden = true;
+    addFiles(e.dataTransfer.files);
+  });
+
+  let toastTimer;
+  function toast(msg, ms = 2600) {
+    const t = $('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+  }
+
+  // ---------- Boot ----------
+  (async () => {
+    try {
+      const [saved, savedOrder, savedProfile, savedSchedule, savedAvatar] = await Promise.all([
+        store.allPosts(), store.get('order'), store.get('profile'), store.get('schedule'), store.get('avatar'),
+      ]);
+      saved.forEach(p => posts.set(p.id, p));
+      const known = new Set(posts.keys());
+      order = (savedOrder || []).filter(id => known.has(id));
+      for (const id of known) if (!order.includes(id)) order.unshift(id);
+      if (savedProfile) profile = { ...profile, ...savedProfile };
+      if (savedSchedule) schedule = { ...schedule, ...savedSchedule };
+      if (savedAvatar) avatarBlob = savedAvatar;
+    } catch {
+      toast("Saving isn't available in this browser. Your plan will reset on refresh.", 5000);
+    }
+    let tab = 'grid';
+    try { tab = localStorage.getItem('feed-planner-tab') || 'grid'; } catch {}
+    renderProfile();
+    renderScheduleInputs();
+    setTab(tab === 'schedule' ? 'schedule' : 'grid');
+    render();
+  })();
+})();
+</script>
+</body>
+</html>

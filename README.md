@@ -1,4 +1,4 @@
-# Feed Planner
+# DreamVision Feed Planner
 
 A phone-style profile grid for planning posts. Open `index.html` in a browser (phone or desktop); nothing to install.
 

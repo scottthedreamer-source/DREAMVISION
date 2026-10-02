@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<title>Feed Planner</title>
+<title>DreamVision Feed Planner</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -22,7 +22,7 @@
     --backdrop: rgba(0, 0, 0, 0.45);
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #000000;
       --fg: #f5f5f5;
       --muted: #a8a8a8;
@@ -32,8 +32,23 @@
       --sheet: #1a1a1a;
       --link: #e0f1ff;
       --backdrop: rgba(0, 0, 0, 0.65);
+      color-scheme: dark;
     }
   }
+  :root[data-theme="dark"] {
+    --bg: #000000;
+    --fg: #f5f5f5;
+    --muted: #a8a8a8;
+    --line: #262626;
+    --chip: #262626;
+    --chip-hover: #363636;
+    --sheet: #1a1a1a;
+    --link: #e0f1ff;
+    --backdrop: rgba(0, 0, 0, 0.65);
+    color-scheme: dark;
+  }
+  /* Keep content clear of the notch / home bar; fixed bars add their own inset. */
+  :root { padding-top: env(safe-area-inset-top, 0px); }
 
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
@@ -61,11 +76,9 @@
 
   /* Top bar */
   .topbar {
-    position: sticky; top: 0; z-index: 20;
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
     display: flex; align-items: center; gap: 8px;
     height: 48px; padding: 0 16px;
-    padding-top: env(safe-area-inset-top);
-    box-sizing: content-box;
     background: var(--bg);
   }
   .topbar .handle { font-size: 20px; font-weight: 700; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
@@ -268,6 +281,8 @@
   .sheet-btns .btn { flex: 1 1 120px; height: 34px; }
   .btn.danger { color: var(--danger); background: transparent; }
   .btn.danger:hover { background: var(--chip); }
+  .btn.danger.armed { background: var(--danger); color: #fff; }
+  .slide .rm.armed { width: auto; padding: 0 12px; border-radius: 15px; background: var(--danger); font-size: 13px; font-weight: 600; }
 
   /* Cover picker */
   .cover { display: grid; grid-template-columns: 78px 1fr; gap: 12px; align-items: center; padding: 12px; border-radius: 12px; background: var(--chip); }
@@ -1281,13 +1296,15 @@
     const rm = e.target.closest('[data-remove]');
     const p = posts.get(openId);
     if (!rm || !p) return;
-    if (!confirm('Remove this slide?')) return;
-    const [gone] = p.slides.splice(Number(rm.dataset.remove), 1);
+    confirmTap(rm, 'Tap again to remove', () => removeSlide(p, Number(rm.dataset.remove)));
+  });
+  async function removeSlide(p, index) {
+    const [gone] = p.slides.splice(index, 1);
     dropUrl(gone);
     if (!p.customThumb || !p.slides.length) { p.customThumb = false; await autoThumb(p); }
     if (p.kind === 'carousel' && p.slides.length === 1) p.kind = isVideo(p.slides[0]) ? 'reel' : 'post';
     savePost(p); render(); renderSheet();
-  });
+  }
   $('mediaInput').addEventListener('change', e => {
     const files = [...e.target.files]; e.target.value = '';
     const target = mediaTarget || openId;
@@ -1295,16 +1312,19 @@
     if (target && files.length) addMediaTo(target, files);
   });
 
-  $('deleteBtn').addEventListener('click', () => {
+  $('deleteBtn').addEventListener('click', e => {
     const p = posts.get(openId); if (!p) return;
-    if (!confirm('Delete this cell from the planner?')) return;
+    confirmTap(e.currentTarget, 'Tap again to delete', () => deleteCell(p));
+  });
+  function deleteCell(p) {
     closeSheet();
     dropUrl(p.thumb); p.slides.forEach(dropUrl);
     posts.delete(p.id);
     order = order.filter(id => id !== p.id);
     persist(store.deletePost(p.id));
     saveOrder(); render();
-  });
+    toast('Cell deleted.');
+  }
 
   // ---------- Wiring ----------
   let pickMode = 'each';
@@ -1418,6 +1438,24 @@
     else if (tile) addMediaTo(tile.dataset.id, e.dataTransfer.files);
     else addFiles(e.dataTransfer.files);
   });
+
+  // Two-tap confirm: first tap arms the button for 3 seconds, second tap runs the action.
+  function confirmTap(btn, armedHTML, run) {
+    if (btn.dataset.armed) {
+      clearTimeout(btn._disarm);
+      btn.innerHTML = btn.dataset.original; delete btn.dataset.armed; btn.classList.remove('armed');
+      run();
+      return;
+    }
+    btn.dataset.original = btn.innerHTML;
+    btn.dataset.armed = '1';
+    btn.innerHTML = armedHTML;
+    btn.classList.add('armed');
+    btn._disarm = setTimeout(() => {
+      if (!btn.dataset.armed) return;
+      btn.innerHTML = btn.dataset.original; delete btn.dataset.armed; btn.classList.remove('armed');
+    }, 3000);
+  }
 
   let toastTimer;
   function toast(msg, ms = 2600) {

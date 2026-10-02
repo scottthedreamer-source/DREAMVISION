@@ -16,3 +16,15 @@ A phone-style profile grid for planning posts. Open `Instagram Previewer.html` i
 Everything is saved in the browser you use (IndexedDB), so it survives refreshes but stays on that device and browser.
 
 **Backup**: tap the download icon at the top, then **Save** to get one `.zip` with your whole plan (posts, videos, thumbnails, profile and schedule). **Restore** loads a backup into any browser, replacing what is there.
+
+# YouTube Previewer
+
+`YouTube Previewer.html` is the same idea for a YouTube channel page: see how thumbnails and titles look side by side before you publish.
+
+- **Channel header**: click the banner, profile picture, name, verified badge, handle, subscriber and video counts, description or links to change them.
+- **Videos and Shorts tabs**: 16:9 video cards and 9:16 Shorts. Click any title, view count or age ("2d ago") right on a card to edit it. Video length fills in automatically.
+- **Thumbnails**: drop a designed thumbnail image onto a card, or open a card and pick a frame from the video.
+- **Add**: videos and images each get a card; vertical clips under 3 minutes go to Shorts. **Paste list** turns a list of titles into cards (lines with "short" go to Shorts).
+- **Latest / Popular / Oldest** sort like YouTube (Popular uses the view counts you type). Drag cards to rearrange while on Latest.
+- **Schedule**: separate start date, time and spacing for Videos and Shorts; the last card in each tab goes out first.
+- Video compression and **Backup** work the same as in the Instagram Previewer.

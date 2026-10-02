@@ -1,0 +1,1629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>YouTube Previewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+<style>
+  /* Layout: a planning toolbar on top, then a channel page (banner, header, tabs, card grid) at YouTube's proportions. */
+  :root {
+    --bg: #ffffff;
+    --fg: #0f0f0f;
+    --muted: #606060;
+    --line: #e5e5e5;
+    --chip: #f2f2f2;
+    --chip-hover: #e5e5e5;
+    --sheet: #ffffff;
+    --accent: #065fd4;
+    --danger: #cc0000;
+    --badge: rgba(0, 0, 0, 0.8);
+    --backdrop: rgba(0, 0, 0, 0.5);
+    --tool: #fafafa;
+    --font: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f0f0f;
+      --fg: #f1f1f1;
+      --muted: #aaaaaa;
+      --line: #3f3f3f;
+      --chip: #272727;
+      --chip-hover: #3f3f3f;
+      --sheet: #212121;
+      --accent: #3ea6ff;
+      --backdrop: rgba(0, 0, 0, 0.7);
+      --tool: #181818;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f0f0f;
+    --fg: #f1f1f1;
+    --muted: #aaaaaa;
+    --line: #3f3f3f;
+    --chip: #272727;
+    --chip-hover: #3f3f3f;
+    --sheet: #212121;
+    --accent: #3ea6ff;
+    --backdrop: rgba(0, 0, 0, 0.7);
+    --tool: #181818;
+    color-scheme: dark;
+  }
+  :root { padding-top: env(safe-area-inset-top, 0px); }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font); }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  svg { display: block; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  [contenteditable] { outline: none; border-radius: 4px; }
+  [contenteditable]:hover { box-shadow: 0 0 0 1px var(--line); }
+  [contenteditable]:focus { background: var(--chip); box-shadow: 0 0 0 1px var(--accent); }
+  [contenteditable]:empty::before { content: attr(data-placeholder); color: var(--muted); font-weight: 400; }
+
+  /* Planning toolbar (not part of the mockup) */
+  .toolbar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30;
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+    background: var(--tool); border-bottom: 1px solid var(--line);
+  }
+  .appname { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .appname svg { flex: none; }
+  .appname small { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .seg { display: flex; background: var(--chip); border-radius: 18px; padding: 2px; }
+  .seg button { height: 32px; padding: 0 14px; border-radius: 16px; font-weight: 500; color: var(--muted); }
+  .seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .tool-actions { margin-left: auto; display: flex; gap: 8px; }
+  .tbtn { height: 36px; padding: 0 14px; border-radius: 18px; background: var(--chip); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tbtn:hover { background: var(--chip-hover); }
+  .tbtn.primary { background: var(--fg); color: var(--bg); }
+  @media (max-width: 720px) {
+    .toolbar { flex-wrap: wrap; }
+    .appname small { display: none; }
+    .tool-actions { margin-left: 0; width: 100%; }
+    .tool-actions .tbtn { flex: 1; justify-content: center; padding: 0 8px; }
+    .tbtn .lbl-long { display: none; }
+  }
+
+  .page { max-width: 1284px; margin: 0 auto; padding: 16px 24px 48px; }
+  @media (max-width: 720px) { .page { padding: 12px 16px 40px; } }
+
+  /* Banner */
+  .banner {
+    position: relative; aspect-ratio: 6.2 / 1; border-radius: 16px; overflow: hidden; max-width: 100%;
+    background: linear-gradient(110deg, var(--chip), var(--chip-hover));
+  }
+  .banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .banner-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-weight: 500; }
+  .banner-tools { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+  .banner-tools button { height: 32px; padding: 0 12px; border-radius: 16px; background: rgba(0,0,0,.6); color: #fff; font-size: 13px; font-weight: 500; }
+  @media (max-width: 720px) { .banner { border-radius: 10px; aspect-ratio: 4 / 1; } }
+
+  /* Channel header */
+  .channel { display: flex; gap: 24px; margin: 24px 0 8px; align-items: flex-start; }
+  .avatar {
+    flex: none; width: 160px; height: 160px; border-radius: 50%; cursor: pointer;
+    background: var(--chip) center/cover no-repeat; display: grid; place-items: center; color: var(--muted);
+  }
+  .channel-main { min-width: 0; flex: 1; display: grid; gap: 8px; align-content: start; }
+  .channel-name { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .channel-name h1 { margin: 0; font-size: 36px; line-height: 1.15; font-weight: 700; overflow-wrap: anywhere; text-wrap: balance; }
+  .verified { color: var(--fg); }
+  .verified[aria-pressed="false"] { opacity: .18; }
+  .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
+  .meta b { color: var(--fg); font-weight: 500; }
+  .desc { color: var(--muted); max-width: 900px; display: flex; gap: 4px; align-items: baseline; min-width: 0; }
+  .desc .text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .desc.open .text, .desc .text:focus { white-space: pre-wrap; overflow: visible; }
+  .desc .more { color: var(--fg); font-weight: 500; flex: none; }
+  .desc.open .more { display: none; }
+  .links { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .links .lk { color: var(--accent); font-weight: 500; display: inline-flex; gap: 4px; align-items: center; }
+  .links .extra { font-weight: 500; }
+  .subscribe { justify-self: start; height: 36px; padding: 0 16px; border-radius: 18px; background: var(--fg); color: var(--bg); font-weight: 500; margin-top: 4px; }
+  @media (max-width: 720px) {
+    .channel { gap: 14px; margin-top: 16px; }
+    .avatar { width: 72px; height: 72px; }
+    .channel-name h1 { font-size: 22px; }
+    .desc { font-size: 13px; }
+  }
+
+  /* Tabs + chips */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { height: 48px; padding: 0 12px; font-size: 16px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+  .tab:not([aria-disabled="true"]):hover { color: var(--fg); }
+  .tab[aria-disabled="true"] { cursor: default; }
+  .tab-search { color: var(--muted); padding: 0 12px; display: grid; place-items: center; }
+  .chips { display: flex; gap: 12px; margin: 16px 0; flex-wrap: wrap; align-items: center; }
+  .chip { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--chip); font-weight: 500; }
+  .chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .chips .hint { margin-left: 4px; }
+
+  /* Video cards */
+  .vgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 40px 16px; }
+  .sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(46%, 210px), 1fr)); gap: 24px 8px; }
+  .vcard { min-width: 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .thumb {
+    position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: var(--chip); cursor: pointer; max-width: 100%;
+  }
+  .sgrid .thumb { aspect-ratio: 9 / 16; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 14px; text-align: center; color: #fff; background: hsl(var(--h, 220) 22% 28%); }
+  .ph span { font-weight: 700; font-size: 15px; line-height: 1.2; overflow-wrap: anywhere; }
+  .ph small { font-size: 12px; opacity: .75; }
+  .dur { position: absolute; right: 8px; bottom: 8px; padding: 1px 5px; border-radius: 4px; background: var(--badge); color: #fff; font-size: 12px; font-weight: 500; }
+  .when { position: absolute; left: 8px; top: 8px; padding: 2px 7px; border-radius: 4px; background: var(--badge); color: #fff; font-size: 12px; font-weight: 500; }
+  .when.live { background: rgba(6, 95, 212, .9); }
+  .busy { position: absolute; inset: auto 0 0 0; padding: 20px 8px 8px; text-align: center; background: linear-gradient(transparent, rgba(0,0,0,.78)); color: #fff; font-size: 12px; font-weight: 500; }
+  .vcard.drop-target .thumb { box-shadow: 0 0 0 3px var(--accent); }
+  .vinfo { display: flex; gap: 8px; margin-top: 12px; align-items: flex-start; }
+  .vtext { flex: 1; min-width: 0; }
+  .vtitle { font-size: 16px; font-weight: 500; line-height: 22px; max-height: 44px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+  .vtitle:focus { max-height: none; display: block; }
+  .vmeta { color: var(--muted); margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .vmeta .views { display: inline-flex; gap: 4px; align-items: center; }
+  .vmeta [contenteditable] { min-width: 1ch; user-select: text; -webkit-user-select: text; }
+  .sgrid .vinfo { margin-top: 8px; }
+  .sgrid .vtitle { font-size: 15px; }
+  .dots { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; margin-top: -4px; }
+  .dots:hover { background: var(--chip); }
+  .add-card .thumb { width: 100%; display: grid; place-items: center; background: transparent; outline: 1.5px dashed var(--line); outline-offset: -1px; color: var(--muted); font-weight: 500; }
+  .add-card .thumb:hover { color: var(--fg); }
+  .dragging-src { opacity: .25; }
+  .drag-ghost { position: fixed; z-index: 100; pointer-events: none; margin: 0; box-shadow: 0 12px 32px rgba(0,0,0,.35); border-radius: 12px; transform: scale(1.03); background: var(--bg); }
+  body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+
+  .empty { padding: 56px 24px; text-align: center; display: grid; gap: 12px; justify-items: center; }
+  .empty h2 { margin: 0; font-size: 20px; }
+  .empty p { margin: 0; color: var(--muted); max-width: 46ch; }
+  .empty .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .recover { margin: 0 0 16px; padding: 12px 16px; border-radius: 12px; background: var(--chip); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .recover p { margin: 0; flex: 1 1 280px; }
+
+  /* Schedule view */
+  .sched { display: grid; gap: 16px; padding-top: 8px; }
+  .sched-settings { display: grid; gap: 10px; padding: 16px; border-radius: 12px; background: var(--chip); }
+  .sched-settings .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sched-settings .row b { width: 64px; }
+  .sched-settings label { color: var(--muted); font-size: 13px; }
+  .field { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; height: 36px; padding: 0 10px; min-width: 0; }
+  .field.num { width: 60px; text-align: center; }
+  .field.wide { width: 100%; }
+  .slist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .srow { display: flex; gap: 14px; align-items: center; padding: 8px; border-radius: 10px; cursor: pointer; }
+  .srow:hover { background: var(--chip); }
+  .srow .st { width: 96px; aspect-ratio: 16 / 9; border-radius: 6px; background: var(--chip) center/cover no-repeat; position: relative; overflow: hidden; flex: none; }
+  .srow .st.short { width: 40px; aspect-ratio: 9 / 16; margin: 0 28px; }
+  .srow .st .ph span { font-size: 8px; }
+  .srow .st .ph small { display: none; }
+  .srow .info { flex: 1; min-width: 0; }
+  .srow .date { font-weight: 500; font-variant-numeric: tabular-nums; }
+  .srow .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .srow .k { color: var(--muted); font-size: 12px; }
+  .group-label { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; padding: 8px 8px 0; }
+
+  /* Modals */
+  .backdrop { position: fixed; inset: 0; z-index: 50; background: var(--backdrop); display: flex; align-items: center; justify-content: center; padding: 24px; animation: fade .15s ease; }
+  .sheet { width: 100%; max-width: 620px; max-height: calc(100dvh - 48px); overflow: auto; overscroll-behavior: contain; background: var(--sheet); border-radius: 16px; animation: up .2s ease; }
+  .sheet.small { max-width: 460px; }
+  @media (max-width: 720px) {
+    .backdrop { align-items: flex-end; padding: 0; }
+    .sheet { max-height: 94dvh; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  }
+  .sheet-title { font-size: 18px; font-weight: 700; padding: 18px 20px 4px; }
+  .sheet-body { padding: 12px 20px 20px; display: grid; gap: 14px; }
+  .player { background: #000; display: flex; align-items: center; justify-content: center; aspect-ratio: 16 / 9; max-height: 52dvh; position: relative; overflow: hidden; }
+  .player.short { aspect-ratio: auto; height: min(56dvh, 560px); }
+  .player video, .player img { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; object-fit: contain; }
+  .player.short video, .player.short img { height: 100%; }
+  .player .msg { color: #fff; text-align: center; padding: 20px; display: grid; gap: 12px; justify-items: center; }
+  .player .msg p { margin: 0; opacity: .85; max-width: 44ch; }
+  .when-line { font-weight: 500; }
+  .when-line small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .grid3 label, .lbl { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
+  .grid3 .field { width: 100%; }
+  .sheet textarea { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-height: 72px; resize: vertical; width: 100%; }
+  .kind { display: flex; background: var(--chip); border-radius: 18px; padding: 2px; }
+  .kind button { flex: 1; height: 32px; border-radius: 16px; font-weight: 500; color: var(--muted); }
+  .kind button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .cover { display: grid; grid-template-columns: 150px 1fr; gap: 14px; align-items: center; padding: 12px; border-radius: 12px; background: var(--chip); }
+  .cover.short { grid-template-columns: 70px 1fr; }
+  .cover-preview { aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #000; position: relative; max-width: 100%; }
+  .cover.short .cover-preview { aspect-ratio: 9 / 16; }
+  .cover-preview img, .cover-preview canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cover-preview .ph span { font-size: 9px; }
+  .cover-preview .ph small { display: none; }
+  .cover h3 { margin: 0 0 2px; font-size: 14px; }
+  .cover .hint { margin-bottom: 8px; }
+  .cover input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0 0 8px; }
+  @media (max-width: 520px) { .cover { grid-template-columns: 1fr; } .cover-preview { width: 160px; } .cover.short .cover-preview { width: 80px; } }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { flex: 1 1 120px; min-height: 36px; padding: 0 14px; border-radius: 18px; background: var(--chip); font-weight: 500; }
+  .btn:hover { background: var(--chip-hover); }
+  .btn.primary { background: var(--fg); color: var(--bg); }
+  .cover .btn { background: var(--bg); flex: 1 1 100px; font-size: 13px; }
+  .cover .btn.primary { background: var(--fg); }
+  .btn.danger { color: var(--danger); background: transparent; }
+  .btn.danger:hover { background: var(--chip); }
+  .btn.danger.armed { background: var(--danger); color: #fff; }
+  .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .switch-row small { display: block; color: var(--muted); font-size: 12px; }
+  .switch { position: relative; width: 44px; height: 26px; flex: none; }
+  .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; z-index: 1; }
+  .switch span { position: absolute; inset: 0; border-radius: 13px; background: var(--line); transition: background .15s; pointer-events: none; }
+  .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(18px); }
+  .menu { display: grid; padding: 4px 8px 8px; }
+  .menu button { display: flex; gap: 14px; align-items: center; text-align: left; padding: 12px; border-radius: 10px; }
+  .menu button:hover { background: var(--chip); }
+  .menu b { display: block; font-weight: 500; }
+  .menu small { color: var(--muted); }
+  .menu .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; flex: none; }
+  .menu-setting { margin: 0 8px 12px; padding: 12px 12px 4px; border-top: 1px solid var(--line); }
+  .backup-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--chip); }
+  .backup-row > div { flex: 1; min-width: 0; }
+  .backup-row b { display: block; font-weight: 500; }
+  .backup-row small { color: var(--muted); }
+  .backup-row .btn { flex: none; min-width: 90px; background: var(--bg); }
+  .backup-row .btn.primary { background: var(--fg); }
+  .restore-confirm { padding: 12px; border-radius: 12px; border: 1px solid var(--danger); display: grid; gap: 10px; }
+  .restore-confirm p { margin: 0; }
+
+  .drop-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 16%, transparent); border: 3px dashed var(--accent); font-size: 18px; font-weight: 700; color: var(--accent); pointer-events: none; text-align: center; padding: 20px; }
+  .toast { position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 70; background: #0f0f0f; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  @keyframes fade { from { opacity: 0; } }
+  @keyframes up { from { transform: translateY(24px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="toolbar">
+  <div class="appname"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="13" height="8" rx="1.5"/><rect x="17" y="4" width="5" height="8" rx="1.5"/><path d="M2 16h13M2 20h9M17 16h5"/></svg>YouTube Previewer <small>planning mockup</small></div>
+  <div class="seg" role="group" aria-label="View">
+    <button data-view="channel" aria-pressed="true">Channel</button>
+    <button data-view="schedule" aria-pressed="false">Schedule</button>
+  </div>
+  <div class="tool-actions">
+    <button class="tbtn primary" data-open-add>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add
+    </button>
+    <button class="tbtn" data-open-paste><span>Paste<span class="lbl-long"> list</span></span></button>
+    <button class="tbtn" data-open-backup>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>Backup
+    </button>
+  </div>
+</header>
+
+<main class="page">
+  <div class="recover" id="recover" hidden>
+    <p><b>The previewer closed unexpectedly last time.</b> Very large videos can do this. Smaller H.264 exports work best.</p>
+    <div class="btns">
+      <button class="btn" id="recoverOk">OK</button>
+      <button class="btn danger" id="recoverClear">Clear all previewer data</button>
+    </div>
+  </div>
+
+  <div class="banner" id="banner">
+    <div class="banner-empty" id="bannerEmpty">Add a banner image (2560 × 1440 works best)</div>
+    <div class="banner-tools">
+      <button id="bannerRemove" hidden>Remove</button>
+      <button id="bannerBtn">Change banner</button>
+    </div>
+  </div>
+
+  <section class="channel">
+    <div class="avatar" id="avatar" title="Change profile picture">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+    </div>
+    <div class="channel-main">
+      <div class="channel-name">
+        <h1 id="pName" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Channel name"></h1>
+        <button class="verified" id="verifiedBtn" aria-pressed="false" aria-label="Verified badge" title="Tap to toggle the verified badge">
+          <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12.3l3 2.9 6-6.2" fill="none" stroke="var(--bg)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="meta">
+        <b id="pHandle" contenteditable="plaintext-only" spellcheck="false" data-placeholder="@handle"></b>
+        <span>•</span>
+        <span><span id="pSubs" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0"></span> subscribers</span>
+        <span>•</span>
+        <span><span id="pCount" contenteditable="plaintext-only" spellcheck="false"></span> videos</span>
+      </div>
+      <div class="desc" id="descWrap">
+        <span class="text" id="pDesc" contenteditable="plaintext-only" data-placeholder="Tell viewers about your channel"></span>
+        <button class="more" id="descMore">...more</button>
+      </div>
+      <div class="links">
+        <span class="lk">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></svg>
+          <span id="pLink" contenteditable="plaintext-only" spellcheck="false" data-placeholder="yourwebsite.com"></span>
+        </span>
+        <span class="extra" id="pLinkExtra" contenteditable="plaintext-only" data-placeholder="and 1 more link"></span>
+      </div>
+      <button class="subscribe" type="button" tabindex="-1">Subscribe</button>
+    </div>
+  </section>
+
+  <section id="channelView">
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="home" aria-selected="false" title="Shows your videos">Home</button>
+      <button class="tab" role="tab" data-tab="videos" aria-selected="true">Videos</button>
+      <button class="tab" role="tab" data-tab="shorts" aria-selected="false">Shorts</button>
+      <button class="tab" role="tab" aria-disabled="true" tabindex="-1" title="Not part of the preview">Playlists</button>
+      <button class="tab" role="tab" aria-disabled="true" tabindex="-1" title="Not part of the preview">Posts</button>
+      <span class="tab-search" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></span>
+    </nav>
+    <div class="chips" role="group" aria-label="Sort">
+      <button class="chip" data-sort="latest" aria-pressed="true">Latest</button>
+      <button class="chip" data-sort="popular" aria-pressed="false">Popular</button>
+      <button class="chip" data-sort="oldest" aria-pressed="false">Oldest</button>
+      <span class="hint" id="sortHint"></span>
+    </div>
+    <div class="vgrid" id="videosGrid"></div>
+    <div class="sgrid" id="shortsGrid" hidden></div>
+    <div class="empty" id="emptyState" hidden>
+      <h2 id="emptyTitle">Plan your channel</h2>
+      <p id="emptyText">Add videos or thumbnail images, or paste your video list. Then drag cards around and edit every title, view count and date right on the page.</p>
+      <div class="row">
+        <button class="tbtn primary" data-pick="each">Add videos &amp; thumbnails</button>
+        <button class="tbtn" data-open-paste>Paste a list</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="scheduleView" class="sched" hidden>
+    <div class="sched-settings">
+      <div class="row">
+        <b>Videos</b>
+        <label for="vStart">Start</label><input class="field" type="date" id="vStart">
+        <label for="vTime">at</label><input class="field" type="time" id="vTime">
+        <label for="vEvery">every</label><input class="field num" type="number" id="vEvery" min="1" max="60"><label for="vEvery">day(s)</label>
+      </div>
+      <div class="row">
+        <b>Shorts</b>
+        <label for="sStart">Start</label><input class="field" type="date" id="sStart">
+        <label for="sTime">at</label><input class="field" type="time" id="sTime">
+        <label for="sEvery">every</label><input class="field num" type="number" id="sEvery" min="1" max="60"><label for="sEvery">day(s)</label>
+      </div>
+      <div class="hint">The last card in each tab goes out first. Drag cards on the Channel view (sorted by Latest) to change the order; dates follow.</div>
+    </div>
+    <ul class="slist" id="schedList"></ul>
+    <div class="empty" id="schedEmpty" hidden><p>Nothing scheduled yet. Add videos and they'll show up here in posting order.</p></div>
+  </section>
+</main>
+
+<!-- Add menu -->
+<div class="backdrop" id="addMenu" hidden>
+  <div class="sheet small" role="dialog" aria-modal="true" aria-label="Add">
+    <div class="sheet-title">Add to your channel</div>
+    <div class="menu">
+      <button data-pick="each">
+        <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg></span>
+        <span><b>Videos &amp; thumbnails</b><small>Each file gets its own card. Images become the card's thumbnail. Vertical clips under 3 minutes go to Shorts.</small></span>
+      </button>
+      <button data-add-empty="video">
+        <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"><rect x="3" y="5" width="18" height="14" rx="2"/></svg></span>
+        <span><b>Empty video card</b><small>A titled spot for a video you haven't made yet</small></span>
+      </button>
+      <button data-add-empty="short">
+        <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"><rect x="7" y="3" width="10" height="18" rx="2"/></svg></span>
+        <span><b>Empty Short</b><small>A titled spot for a Short</small></span>
+      </button>
+      <button data-open-paste>
+        <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></span>
+        <span><b>Paste a list</b><small>Turn your list of video titles into cards</small></span>
+      </button>
+    </div>
+    <div class="menu-setting switch-row">
+      <span><b>Compress videos</b><small>Makes a lighter 720p copy so the previewer stays fast. Your original files aren't changed.</small></span>
+      <span class="switch"><input type="checkbox" id="compressToggle" aria-label="Compress videos"><span></span></span>
+    </div>
+  </div>
+</div>
+
+<!-- Paste list -->
+<div class="backdrop" id="pasteModal" hidden>
+  <div class="sheet small" role="dialog" aria-modal="true" aria-label="Paste a list">
+    <div class="sheet-title">Paste your video list</div>
+    <div class="sheet-body">
+      <div class="hint">One title per line. Line 1 becomes the first (newest) card. Lines with “short” go to the Shorts tab.</div>
+      <textarea id="pasteText" rows="9" placeholder="How I make sports films for brands (9 steps)&#10;5 Pro Sound Design Tricks&#10;Short: My top camera settings&#10;…"></textarea>
+      <div class="btns">
+        <button class="btn" data-close>Cancel</button>
+        <button class="btn primary" id="pasteCreate">Create cards</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Backup -->
+<div class="backdrop" id="backupModal" hidden>
+  <div class="sheet small" role="dialog" aria-modal="true" aria-label="Backup">
+    <div class="sheet-title">Backup</div>
+    <div class="sheet-body">
+      <div class="hint">Your channel plan is saved in this browser only. A backup file holds everything (cards, videos, thumbnails, banner, profile and schedule) so you can keep it safe or open it on another computer.</div>
+      <div class="backup-row">
+        <div><b>Save backup file</b><small id="lastBackup">No backup saved yet.</small></div>
+        <button class="btn primary" id="backupSave">Save</button>
+      </div>
+      <div class="backup-row">
+        <div><b>Restore from backup</b><small>Replaces what's in the previewer now with the backup.</small></div>
+        <button class="btn" id="backupLoad">Restore</button>
+      </div>
+      <div class="restore-confirm" id="restoreConfirm" hidden>
+        <p id="restoreText"></p>
+        <div class="btns">
+          <button class="btn" id="restoreCancel">Cancel</button>
+          <button class="btn danger armed" id="restoreGo">Replace my plan</button>
+        </div>
+      </div>
+      <div class="hint" id="backupStatus" hidden></div>
+    </div>
+  </div>
+</div>
+
+<!-- Card editor -->
+<div class="backdrop" id="sheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Video details">
+    <div class="player" id="player"></div>
+    <div class="sheet-body">
+      <div class="when-line" id="sheetWhen"></div>
+      <label class="lbl">Title<input class="field wide" id="sTitle" autocomplete="off" placeholder="Video title"></label>
+      <div class="kind" role="group" aria-label="Type">
+        <button data-kind="video">Video</button>
+        <button data-kind="short">Short</button>
+      </div>
+      <div class="grid3">
+        <label>Views<input class="field" id="sViews" placeholder="0" autocomplete="off"></label>
+        <label>Age<input class="field" id="sAge" autocomplete="off"></label>
+        <label>Length<input class="field" id="sLength" autocomplete="off" placeholder="0:00"></label>
+      </div>
+      <div class="cover" id="coverBox">
+        <div class="cover-preview" id="coverPreview"></div>
+        <div>
+          <h3>Thumbnail</h3>
+          <div class="hint" id="coverHint"></div>
+          <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Scrub to pick a frame">
+          <div class="btns">
+            <button class="btn primary" id="frameBtn">Use this frame</button>
+            <button class="btn" id="thumbBtn">Upload image</button>
+            <button class="btn" id="resetThumbBtn">Reset</button>
+          </div>
+        </div>
+      </div>
+      <label class="lbl">Description or notes<textarea id="sCaption"></textarea></label>
+      <div class="switch-row">
+        <span>Already published<small>Published videos keep their spot but leave the schedule.</small></span>
+        <label class="switch"><input type="checkbox" id="sPosted"><span></span></label>
+      </div>
+      <div class="btns"><button class="btn" id="mediaBtn">Add video</button></div>
+      <div class="hint" id="sheetBusy" hidden></div>
+      <div class="btns">
+        <button class="btn danger" id="deleteBtn">Delete card</button>
+        <button class="btn" data-close>Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="drop-overlay" id="dropOverlay" hidden>Drop on a card to fill it, or anywhere else to add new cards</div>
+<div class="toast" id="toast" hidden></div>
+
+<input type="file" id="fileInput" accept="image/*,video/*" multiple hidden>
+<input type="file" id="mediaInput" accept="image/*,video/*" hidden>
+<input type="file" id="avatarInput" accept="image/*" hidden>
+<input type="file" id="bannerInput" accept="image/*" hidden>
+<input type="file" id="thumbInput" accept="image/*" hidden>
+<input type="file" id="backupInput" accept=".zip,application/zip" hidden>
+
+<script>
+(() => {
+  'use strict';
+  const APP = 'youtube-previewer';
+  const $ = id => document.getElementById(id);
+
+  // ---------- Storage (IndexedDB: card records, files stored separately, settings) ----------
+  const store = (() => {
+    let dbPromise = null;
+    function open() {
+      if (!dbPromise) {
+        dbPromise = new Promise((resolve, reject) => {
+          const req = indexedDB.open(APP, 1);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            db.createObjectStore('posts', { keyPath: 'id' });
+            db.createObjectStore('media');
+            db.createObjectStore('kv');
+          };
+          req.onsuccess = () => { req.result.onversionchange = () => req.result.close(); resolve(req.result); };
+          req.onerror = () => reject(req.error);
+          req.onblocked = () => toast('Close the previewer in your other tabs to finish updating it.', 8000);
+        });
+      }
+      return dbPromise;
+    }
+    async function run(name, mode, fn) {
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(name, mode);
+        const req = fn(tx.objectStore(name));
+        tx.oncomplete = () => resolve(req ? req.result : undefined);
+        tx.onerror = tx.onabort = () => reject(tx.error);
+      });
+    }
+    return {
+      allPosts: () => run('posts', 'readonly', s => s.getAll()),
+      putPost: p => run('posts', 'readwrite', s => s.put(p)),
+      deletePost: id => run('posts', 'readwrite', s => s.delete(id)),
+      getMedia: id => run('media', 'readonly', s => s.get(id)),
+      putMedia: (id, blob) => run('media', 'readwrite', s => s.put(blob, id)),
+      deleteMedia: id => run('media', 'readwrite', s => s.delete(id)),
+      get: k => run('kv', 'readonly', s => s.get(k)),
+      set: (k, v) => run('kv', 'readwrite', s => s.put(v, k)),
+      async replaceAll({ posts, media, kv }) {
+        const db = await open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(['posts', 'media', 'kv'], 'readwrite');
+          const [ps, ms, ks] = ['posts', 'media', 'kv'].map(n => tx.objectStore(n));
+          ps.clear(); ms.clear(); ks.clear();
+          posts.forEach(p => ps.put(p));
+          media.forEach(([id, blob]) => ms.put(blob, id));
+          kv.forEach(([k, v]) => ks.put(v, k));
+          tx.oncomplete = () => resolve();
+          tx.onerror = tx.onabort = () => reject(tx.error);
+        });
+      },
+    };
+  })();
+  let saveWarned = false;
+  function persist(promise) {
+    promise.catch(() => { if (!saveWarned) { saveWarned = true; toast("Couldn't save in this browser. Changes will be lost on refresh."); } });
+  }
+
+  // ---------- State ----------
+  // card: { id, kind: 'video'|'short', title, views, age, length, duration, slides: [{id,type,name}], thumb, customThumb, caption, posted, autoKind, created }
+  const posts = new Map();
+  const mediaCache = new Map();
+  let order = [];   // index 0 = newest (first card under "Latest")
+  let profile = { name: 'Your Channel', verified: false, handle: '@yourchannel', subs: '', count: '', desc: '', link: '', linkExtra: '' };
+  let schedule = { video: { start: todayISO(), time: '15:00', every: 7 }, short: { start: todayISO(), time: '12:00', every: 1 } };
+  let settings = { compress: true };
+  let avatarBlob = null, bannerBlob = null;
+  let tab = 'videos', sort = 'latest', view = 'channel';
+  let openId = null;
+  const urls = new Map();
+
+  function todayISO() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const isVideo = b => !!b && /^video\//.test(b.type);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function hue(id) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+  function urlFor(blob) { if (!blob) return ''; let u = urls.get(blob); if (!u) { u = URL.createObjectURL(blob); urls.set(blob, u); } return u; }
+  function dropUrl(blob) { const u = urls.get(blob); if (u) { URL.revokeObjectURL(u); urls.delete(blob); } }
+  const kindOf = id => posts.get(id).kind;
+
+  // ---------- Formatting ----------
+  const fmtShort = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+  const fmtLong = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const fmtTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+  const fmtDateTime = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  function fmtDur(sec) {
+    if (!sec || !isFinite(sec)) return '';
+    const s = Math.round(sec), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
+  }
+  // "2d ago", "3w ago", "1mo ago": the compact style YouTube uses on channel grids.
+  function relAge(date, now = new Date()) {
+    const mins = Math.max(0, Math.round((now - date) / 60000));
+    if (mins < 60) return `${Math.max(1, mins)}m ago`;
+    const hrs = Math.round(mins / 60); if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.round(hrs / 24); if (days < 7) return `${days}d ago`;
+    if (days < 30) return `${Math.round(days / 7)}w ago`;
+    if (days < 365) return `${Math.max(1, Math.round(days / 30))}mo ago`;
+    return `${Math.round(days / 365)}y ago`;
+  }
+  function parseViews(v) {
+    const m = String(v || '').replace(/,/g, '').match(/([\d.]+)\s*([kmb])?/i);
+    if (!m) return 0;
+    return parseFloat(m[1]) * ({ k: 1e3, m: 1e6, b: 1e9 }[(m[2] || '').toLowerCase()] || 1);
+  }
+
+  // ---------- Schedule ----------
+  // Unpublished cards of each kind go out last-card-first (like an upload history read bottom-up).
+  const queueOf = k => order.filter(id => kindOf(id) === k && !posts.get(id).posted).reverse();
+  function scheduleDates() {
+    const map = new Map();
+    for (const k of ['video', 'short']) {
+      const s = schedule[k];
+      const [y, m, d] = (s.start || todayISO()).split('-').map(Number);
+      const [hh, mm] = (s.time || '12:00').split(':').map(Number);
+      const every = Math.max(1, Number(s.every) || 1);
+      queueOf(k).forEach((id, i) => map.set(id, new Date(y, m - 1, d + i * every, hh, mm)));
+    }
+    return map;
+  }
+  function autoAge(p, date) {
+    if (p.posted || !date) return '';
+    return date <= new Date() ? relAge(date) : fmtShort.format(date);
+  }
+
+  // ---------- Thumbnails ----------
+  const canvasToBlob = c => new Promise(res => c.toBlob(b => res(b), 'image/jpeg', 0.86));
+  function drawScaled(source, w, h, max = 1280) {
+    const scale = Math.min(1, max / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+    return canvasToBlob(c);
+  }
+  async function imageThumb(blob, max = 1280) {
+    try {
+      const bmp = await createImageBitmap(blob);
+      const out = await drawScaled(bmp, bmp.width, bmp.height, max);
+      bmp.close && bmp.close();
+      return out || blob;
+    } catch { return blob; }
+  }
+  // Loads a video once: returns its duration, size and a frame as a thumbnail.
+  function videoInfo(blob, wantThumb = true) {
+    return new Promise(resolve => {
+      const v = document.createElement('video');
+      const src = URL.createObjectURL(blob);
+      let done = false;
+      const finish = out => { if (done) return; done = true; URL.revokeObjectURL(src); v.removeAttribute('src'); v.load(); resolve(out); };
+      setTimeout(() => finish(null), 9000);
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      v.onloadeddata = () => {
+        if (!wantThumb) return finish({ duration: v.duration, width: v.videoWidth, height: v.videoHeight, thumb: null });
+        const t = Math.min(1, (v.duration || 2) / 2);
+        if (Math.abs(v.currentTime - t) < 0.01) v.onseeked(); else v.currentTime = t;
+      };
+      v.onseeked = async () => finish({ duration: v.duration, width: v.videoWidth, height: v.videoHeight, thumb: v.videoWidth ? await drawScaled(v, v.videoWidth, v.videoHeight) : null });
+      v.onerror = () => finish(null);
+      v.src = src;
+    });
+  }
+
+  // ---------- Files ----------
+  const EXT_TYPES = {
+    mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', qt: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska',
+    avi: 'video/x-msvideo', mts: 'video/mp2t', m2ts: 'video/mp2t', '3gp': 'video/3gpp',
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif',
+  };
+  const extOf = f => ((f && f.name) || '').split('.').pop().toLowerCase();
+  function asMedia(f) {
+    if (/^(image|video)\//.test(f.type)) return f;
+    const type = EXT_TYPES[extOf(f)];
+    return type ? new File([f], f.name, { type, lastModified: f.lastModified }) : null;
+  }
+  const mediaOnly = list => [...list].map(asMedia).filter(Boolean);
+  function storeMedia(file) {
+    const id = uid();
+    mediaCache.set(id, file);
+    persist(store.putMedia(id, file));
+    return { id, type: file.type, name: file.name || '' };
+  }
+  async function loadMedia(slide) {
+    if (!mediaCache.has(slide.id)) {
+      const blob = await store.getMedia(slide.id).catch(() => null);
+      if (blob) mediaCache.set(slide.id, blob);
+    }
+    return mediaCache.get(slide.id) || null;
+  }
+  function forgetMedia(slide) {
+    const blob = mediaCache.get(slide.id);
+    if (blob) dropUrl(blob);
+    mediaCache.delete(slide.id);
+    persist(store.deleteMedia(slide.id));
+  }
+
+  // ---------- Video compression (WebCodecs via Mediabunny, loaded on demand) ----------
+  const MEDIABUNNY_URL = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.0/dist/bundles/mediabunny.min.mjs';
+  const MAX_SIDE = 1280, VIDEO_BITRATE = 2_500_000, SKIP_BELOW = 12 * 1024 * 1024;
+  let mediabunny = null;
+  const loadMediabunny = () => (mediabunny ||= import(MEDIABUNNY_URL).catch(err => { mediabunny = null; throw err; }));
+  const warned = new Set();
+  const warnOnce = (key, msg) => { if (!warned.has(key)) { warned.add(key); toast(msg, 8000); } };
+  async function compressVideo(file, onProgress) {
+    if (!settings.compress || typeof VideoEncoder === 'undefined') return file;
+    let M, input;
+    try { M = await loadMediabunny(); } catch { warnOnce('compressor', "Couldn't load the video compressor, so this video is kept at full size."); return file; }
+    try {
+      input = new M.Input({ formats: M.ALL_FORMATS, source: new M.BlobSource(file) });
+      const track = await input.getPrimaryVideoTrack();
+      if (!track) return file;
+      if (track.codec === 'avc' && file.size < SKIP_BELOW) return file;
+      if (!(await track.canDecode())) return file;
+      const useAvc = await M.canEncodeVideo('avc');
+      const codec = useAvc ? 'avc' : (await M.canEncodeVideo('vp9')) ? 'vp9' : null;
+      if (!codec) return file;
+      const [canAac, canOpus] = await Promise.all([M.canEncodeAudio('aac'), M.canEncodeAudio('opus')]);
+      const scale = Math.min(1, MAX_SIDE / Math.max(track.displayWidth, track.displayHeight));
+      const even = n => Math.max(2, Math.round(n / 2) * 2);
+      const output = new M.Output({ format: useAvc ? new M.Mp4OutputFormat({ fastStart: 'in-memory' }) : new M.WebMOutputFormat(), target: new M.BufferTarget() });
+      const conversion = await M.Conversion.init({
+        input, output, tracks: 'primary',
+        video: { width: even(track.displayWidth * scale), height: even(track.displayHeight * scale), fit: 'contain', codec, bitrate: VIDEO_BITRATE, forceTranscode: true },
+        audio: t => (useAvc && t.codec === 'aac') ? {} : useAvc && canAac ? { codec: 'aac', bitrate: 128000 } : canOpus ? { codec: 'opus', bitrate: 96000 } : { discard: true },
+      });
+      if (!conversion.isValid) return file;
+      conversion.onProgress = pr => onProgress(pr);
+      await conversion.execute();
+      const buf = output.target.buffer;
+      if (!buf || buf.byteLength >= file.size) return file;
+      const base = (file.name || 'video').replace(/\.[^.]+$/, '');
+      return new File([buf], `${base}.${useAvc ? 'mp4' : 'webm'}`, { type: useAvc ? 'video/mp4' : 'video/webm', lastModified: file.lastModified });
+    } catch (err) {
+      console.warn('Video compression failed; keeping the original file.', err);
+      return file;
+    } finally { try { input && input.dispose(); } catch {} }
+  }
+
+  // ---------- Cards ----------
+  function newPost(fields) {
+    return { id: uid(), kind: 'video', title: '', views: '', age: '', length: '', duration: 0, slides: [], thumb: null, customThumb: false, caption: '', posted: false, autoKind: false, created: Date.now(), ...fields };
+  }
+  const savePost = p => persist(store.putPost(p));
+  const saveOrder = () => persist(store.set('order', order));
+  const titleFromFile = f => (f.name || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+
+  const busy = new Map();
+  function setBusy(id, label) {
+    if (label == null) busy.delete(id); else busy.set(id, label);
+    const spans = document.querySelectorAll(`.vcard[data-id="${id}"] .busy`);
+    if (label != null && !spans.length) render();
+    spans.forEach(el => { el.textContent = label || ''; el.hidden = label == null; });
+    if (openId === id) { $('sheetBusy').hidden = label == null; $('sheetBusy').textContent = label ? `${label}. Keep this page open.` : ''; }
+  }
+
+  // Images set the card's thumbnail; a video becomes the card's video (replacing any earlier one).
+  async function fillCard(p, files) {
+    const image = files.find(f => !isVideo(f));
+    const video = files.find(isVideo);
+    if (image) { p.thumb = await imageThumb(image); p.customThumb = true; }
+    if (video) {
+      setBusy(p.id, 'Reading video…');
+      const info = await videoInfo(video, !p.customThumb);
+      let prepared = video;
+      if (settings.compress) {
+        setBusy(p.id, 'Compressing…');
+        prepared = await compressVideo(video, pr => setBusy(p.id, `Compressing ${Math.round(pr * 100)}%`));
+      }
+      setBusy(p.id, null);
+      if (!posts.has(p.id)) return false; // deleted meanwhile
+      p.slides.forEach(forgetMedia);
+      p.slides = [storeMedia(prepared)];
+      if (info) {
+        p.duration = info.duration || 0;
+        if (p.autoKind) p.kind = info.height > info.width && info.duration <= 180 ? 'short' : 'video';
+        if (!p.customThumb && info.thumb) p.thumb = info.thumb;
+      }
+      p.autoKind = false;
+      p.unplayable = !info;
+    }
+    savePost(p);
+    render();
+    if (openId === p.id) renderSheet();
+    return true;
+  }
+
+  async function addFiles(fileList) {
+    const files = mediaOnly(fileList);
+    if (!files.length) { toast('Only videos and images can be added.'); return; }
+    const created = files.map(f => {
+      const p = newPost({ title: titleFromFile(f), autoKind: isVideo(f), kind: tab === 'shorts' ? 'short' : 'video' });
+      posts.set(p.id, p);
+      savePost(p);
+      return [p, f];
+    });
+    order = created.map(([p]) => p.id).concat(order);
+    saveOrder();
+    if (sort !== 'latest') setSort('latest');
+    render();
+    toast(files.some(isVideo) && settings.compress ? 'Adding… videos are compressed so the previewer stays fast. Keep this page open.' : `Adding ${files.length}…`, 600000);
+    const unplayable = [];
+    for (const [p, f] of created) if ((await fillCard(p, [f])) && p.unplayable) unplayable.push(f.name);
+    const shorts = created.filter(([p]) => p.kind === 'short').length;
+    if (unplayable.length) warnUnplayable(unplayable);
+    else toast(`Added ${created.length}.${shorts ? ` ${shorts} went to Shorts.` : ''} Click any title, view count or date to edit it.`, 5000);
+  }
+  async function addMediaTo(id, fileList) {
+    const p = posts.get(id);
+    const files = mediaOnly(fileList);
+    if (!p) return;
+    if (!files.length) { toast("That isn't a video or image the previewer recognizes.", 6000); return; }
+    toast(files.some(isVideo) && settings.compress ? 'Compressing video so the previewer stays fast. Keep this page open.' : 'Adding…', 600000);
+    if (!(await fillCard(p, files))) return;
+    if (p.unplayable && files.some(isVideo)) warnUnplayable([files.find(isVideo).name]);
+    else toast(files.some(isVideo) ? 'Video added.' : 'Thumbnail updated.');
+  }
+  function warnUnplayable(names) {
+    toast(`Added, but this browser can't play ${names.length === 1 ? `“${names[0]}”` : `${names.length} of these videos`}. ProRes and some iPhone (HEVC) videos only play in Safari. Open the previewer in Safari, or export an H.264 MP4. You can still upload a thumbnail image.`, 12000);
+  }
+  function parseList(text) {
+    return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
+      let title = line.replace(/^\d+\s*[.\-\/):\]]*\s*/, '').trim() || line;
+      const isShort = /\bshorts?\b/i.test(title);
+      title = title.replace(/^\s*shorts?\s*[:\-–]\s*/i, '').replace(/\s*[-–(]\s*shorts?\s*\)?\s*$/i, '').trim() || title;
+      return { title, kind: isShort ? 'short' : 'video' };
+    });
+  }
+
+  // ---------- Rendering ----------
+  const icon = {
+    dots: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>',
+    play: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M7 4.5v15l12-7.5z"/></svg>',
+  };
+  const placeholder = p => `<div class="ph" style="--h:${hue(p.id)}"><span>${esc(p.title || (p.kind === 'short' ? 'Untitled Short' : 'Untitled video'))}</span><small>${p.slides.length ? 'no preview' : '+ add video or thumbnail'}</small></div>`;
+
+  function sortedIds(kind) {
+    const ids = order.filter(id => kindOf(id) === kind);
+    if (sort === 'oldest') return ids.reverse();
+    if (sort === 'popular') return ids.slice().sort((a, b) => parseViews(posts.get(b).views) - parseViews(posts.get(a).views));
+    return ids;
+  }
+
+  function cardHTML(p, date) {
+    const isShort = p.kind === 'short';
+    const len = p.length || fmtDur(p.duration);
+    const badge = p.posted ? '' : date ? `<span class="when">${esc(fmtShort.format(date))}</span>` : '';
+    const thumb = `<div class="thumb" data-open>${p.thumb ? `<img alt="" draggable="false" src="${urlFor(p.thumb)}">` : placeholder(p)}` +
+      badge + (!isShort && len ? `<span class="dur">${esc(len)}</span>` : '') +
+      (busy.has(p.id) ? `<span class="busy">${esc(busy.get(p.id))}</span>` : '') + '</div>';
+    const meta = isShort
+      ? `<div class="vmeta"><span><span contenteditable="plaintext-only" data-field="views" data-placeholder="0">${esc(p.views)}</span> views</span></div>`
+      : `<div class="vmeta"><span class="views">${icon.play}<span contenteditable="plaintext-only" data-field="views" data-placeholder="0">${esc(p.views)}</span></span>` +
+        `<span contenteditable="plaintext-only" data-field="age" data-placeholder="${esc(autoAge(p, date) || 'just now')}">${esc(p.age)}</span></div>`;
+    return thumb + `<div class="vinfo"><div class="vtext"><div class="vtitle" contenteditable="plaintext-only" data-field="title" data-placeholder="${isShort ? 'Untitled Short' : 'Untitled video'}">${esc(p.title)}</div>${meta}</div>` +
+      `<button class="dots" data-open aria-label="Edit card">${icon.dots}</button></div>`;
+  }
+
+  function render() {
+    const dates = scheduleDates();
+    const kind = tab === 'shorts' ? 'short' : 'video';
+    const grid = kind === 'short' ? $('shortsGrid') : $('videosGrid');
+    $('videosGrid').hidden = kind !== 'video';
+    $('shortsGrid').hidden = kind !== 'short';
+    const ids = sortedIds(kind);
+    grid.innerHTML = '';
+    for (const id of ids) {
+      const el = document.createElement('div');
+      el.className = 'vcard';
+      el.dataset.id = id;
+      el.innerHTML = cardHTML(posts.get(id), dates.get(id));
+      grid.appendChild(el);
+    }
+    if (ids.length) {
+      const add = document.createElement('div');
+      add.className = 'vcard add-card';
+      add.innerHTML = `<button class="thumb" data-open-add>+ Add ${kind === 'short' ? 'Short' : 'video'}</button>`;
+      grid.appendChild(add);
+    }
+    $('emptyState').hidden = ids.length > 0;
+    $('emptyTitle').textContent = kind === 'short' ? 'No Shorts yet' : 'Plan your channel';
+    $('emptyText').textContent = kind === 'short'
+      ? 'Add vertical clips (they land here automatically), or paste a list with “short” in the titles.'
+      : 'Add videos or thumbnail images, or paste your video list. Then drag cards around and edit every title, view count and date right on the page.';
+    $('sortHint').textContent = sort === 'latest' ? (ids.length > 1 ? 'Drag cards to rearrange.' : '') : 'Switch to Latest to rearrange.';
+    if (document.activeElement !== $('pCount')) $('pCount').textContent = profile.count || String(posts.size);
+    renderSchedule(dates);
+    if (openId) fillSheetWhen();
+  }
+
+  function renderSchedule(dates = scheduleDates()) {
+    const list = $('schedList');
+    const rows = [...dates.entries()].sort((a, b) => a[1] - b[1]);
+    $('schedEmpty').hidden = rows.length > 0;
+    list.innerHTML = '';
+    let lastMonth = '';
+    for (const [id, d] of rows) {
+      const p = posts.get(id);
+      const month = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      if (month !== lastMonth) {
+        lastMonth = month;
+        const g = document.createElement('li'); g.className = 'group-label'; g.textContent = month; list.appendChild(g);
+      }
+      const li = document.createElement('li');
+      li.className = 'srow';
+      li.dataset.id = id;
+      const st = p.thumb ? `<span class="st${p.kind === 'short' ? ' short' : ''}" style="background-image:url('${urlFor(p.thumb)}')"></span>`
+        : `<span class="st${p.kind === 'short' ? ' short' : ''}">${placeholder(p)}</span>`;
+      li.innerHTML = st + `<span class="info"><div class="date">${fmtLong.format(d)} · ${fmtTime.format(d)}</div><div class="t"></div>` +
+        `<div class="k">${p.kind === 'short' ? 'Short' : 'Video'}${p.slides.length ? '' : ' · needs video'}</div></span>`;
+      li.querySelector('.t').textContent = p.title || 'Untitled';
+      list.appendChild(li);
+    }
+    const live = order.filter(id => posts.get(id).posted).length;
+    if (live) { const g = document.createElement('li'); g.className = 'group-label'; g.textContent = `${live} already published`; list.appendChild(g); }
+  }
+
+  function renderProfile() {
+    $('pName').textContent = profile.name;
+    $('pHandle').textContent = profile.handle;
+    $('pSubs').textContent = profile.subs;
+    $('pDesc').textContent = profile.desc;
+    $('pLink').textContent = profile.link;
+    $('pLinkExtra').textContent = profile.linkExtra;
+    $('verifiedBtn').setAttribute('aria-pressed', String(!!profile.verified));
+    renderImages();
+  }
+  function renderImages() {
+    if (avatarBlob) { $('avatar').style.backgroundImage = `url('${urlFor(avatarBlob)}')`; $('avatar').innerHTML = ''; }
+    const banner = $('banner');
+    banner.querySelector('img')?.remove();
+    $('bannerEmpty').hidden = !!bannerBlob;
+    $('bannerRemove').hidden = !bannerBlob;
+    $('bannerBtn').textContent = bannerBlob ? 'Change banner' : 'Add banner';
+    if (bannerBlob) { const img = document.createElement('img'); img.alt = ''; img.src = urlFor(bannerBlob); banner.prepend(img); }
+  }
+  function renderScheduleInputs() {
+    for (const [k, pre] of [['video', 'v'], ['short', 's']]) {
+      $(pre + 'Start').value = schedule[k].start;
+      $(pre + 'Time').value = schedule[k].time;
+      $(pre + 'Every').value = schedule[k].every;
+    }
+  }
+
+  // ---------- Drag to reorder (pointer events; mouse + touch) ----------
+  function makeSortable(container, itemSelector, { enabled, onEnd }) {
+    let pending = null, drag = null, suppressClick = false;
+    container.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || !enabled()) return;
+      if (e.target.closest('[contenteditable], button:not([data-open]), input')) return;
+      const item = e.target.closest(itemSelector);
+      if (!item || !container.contains(item)) return;
+      pending = { item, x: e.clientX, y: e.clientY, id: e.pointerId, touch: e.pointerType !== 'mouse' };
+      if (pending.touch) pending.timer = setTimeout(() => pending && start(pending), 260);
+    });
+    window.addEventListener('pointermove', e => {
+      if (drag) { e.preventDefault(); move(e); return; }
+      if (!pending || e.pointerId !== pending.id) return;
+      const dist = Math.hypot(e.clientX - pending.x, e.clientY - pending.y);
+      if (pending.touch) { if (dist > 8) cancelPending(); } else if (dist > 6) start(e);
+    }, { passive: false });
+    window.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    container.addEventListener('contextmenu', e => { if (e.target.closest('.thumb')) e.preventDefault(); });
+    container.addEventListener('click', e => { if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false; } }, true);
+    function cancelPending() { if (pending) { clearTimeout(pending.timer); pending = null; } }
+    function start(e) {
+      const { item } = pending;
+      clearTimeout(pending.timer);
+      const r = item.getBoundingClientRect();
+      const ghost = item.cloneNode(true);
+      ghost.classList.add('drag-ghost');
+      ghost.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+      Object.assign(ghost.style, { width: r.width + 'px', left: r.left + 'px', top: r.top + 'px' });
+      document.body.appendChild(ghost);
+      item.classList.add('dragging-src');
+      document.body.classList.add('is-dragging');
+      drag = { item, ghost, dx: pending.x - r.left, dy: pending.y - r.top, lastX: pending.x, lastY: pending.y };
+      pending = null;
+      move({ clientX: e.clientX ?? e.x, clientY: e.clientY ?? e.y });
+      autoScroll();
+    }
+    function move(e) {
+      drag.lastX = e.clientX; drag.lastY = e.clientY;
+      drag.ghost.style.left = (e.clientX - drag.dx) + 'px';
+      drag.ghost.style.top = (e.clientY - drag.dy) + 'px';
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const target = under && under.closest(itemSelector);
+      if (!target || target === drag.item || target._flipping || !container.contains(target)) return;
+      const items = [...container.querySelectorAll(itemSelector)];
+      const from = items.indexOf(drag.item), to = items.indexOf(target);
+      flip(items, () => target.insertAdjacentElement(to > from ? 'afterend' : 'beforebegin', drag.item));
+    }
+    function autoScroll() {
+      if (!drag) return;
+      const y = drag.lastY, h = window.innerHeight;
+      if (y < 110) window.scrollBy(0, -Math.ceil((110 - y) / 6));
+      else if (y > h - 70) window.scrollBy(0, Math.ceil((y - (h - 70)) / 6));
+      drag.raf = requestAnimationFrame(() => { if (drag) { move({ clientX: drag.lastX, clientY: drag.lastY }); autoScroll(); } });
+    }
+    function end() {
+      cancelPending();
+      if (!drag) return;
+      cancelAnimationFrame(drag.raf);
+      drag.ghost.remove();
+      drag.item.classList.remove('dragging-src');
+      document.body.classList.remove('is-dragging');
+      drag = null;
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 400);
+      onEnd([...container.querySelectorAll(itemSelector)].map(el => el.dataset.id));
+    }
+    function flip(items, mutate) {
+      const before = new Map(items.map(el => [el, el.getBoundingClientRect()]));
+      mutate();
+      for (const el of items) {
+        if (el === drag.item) continue;
+        const a = before.get(el), b = el.getBoundingClientRect();
+        const dx = a.left - b.left, dy = a.top - b.top;
+        if (!dx && !dy) continue;
+        el._flipping = true;
+        clearTimeout(el._flipTimer);
+        el._flipTimer = setTimeout(() => { el._flipping = false; }, 200);
+        el.style.transition = 'none';
+        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        requestAnimationFrame(() => { el.style.transition = 'transform .18s ease'; el.style.transform = ''; });
+      }
+    }
+  }
+  for (const [gridId, kind] of [['videosGrid', 'video'], ['shortsGrid', 'short']]) {
+    makeSortable($(gridId), '.vcard[data-id]', {
+      enabled: () => sort === 'latest',
+      onEnd(ids) {
+        let k = 0;
+        order = order.map(id => (kindOf(id) === kind ? ids[k++] : id));
+        saveOrder(); render();
+      },
+    });
+  }
+
+  // Inline editing of titles, views and ages right on the cards.
+  let inlineTimer;
+  for (const gridId of ['videosGrid', 'shortsGrid']) {
+    const grid = $(gridId);
+    grid.addEventListener('input', e => {
+      const el = e.target.closest('[data-field]');
+      const card = e.target.closest('.vcard[data-id]');
+      if (!el || !card) return;
+      const p = posts.get(card.dataset.id);
+      p[el.dataset.field] = el.textContent.trim();
+      clearTimeout(inlineTimer);
+      inlineTimer = setTimeout(() => { savePost(p); renderSchedule(); }, 300);
+    });
+    grid.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.closest('[data-field]')) { e.preventDefault(); e.target.blur(); } });
+    grid.addEventListener('focusout', e => { if (e.target.closest('[data-field]') && sort === 'popular') render(); });
+    grid.addEventListener('click', e => {
+      if (e.target.closest('[data-open-add]')) return;
+      const open = e.target.closest('[data-open]');
+      const card = e.target.closest('.vcard[data-id]');
+      if (open && card) openSheet(card.dataset.id);
+    });
+  }
+  $('schedList').addEventListener('click', e => { const row = e.target.closest('.srow'); if (row) openSheet(row.dataset.id); });
+
+  // ---------- Modals ----------
+  const openModals = [];
+  function openModal(id) { $(id).hidden = false; openModals.push(id); document.body.style.overflow = 'hidden'; }
+  function closeModal(id) {
+    if (id === 'sheet') return closeSheet();
+    $(id).hidden = true;
+    const i = openModals.indexOf(id); if (i >= 0) openModals.splice(i, 1);
+    if (!openModals.length) document.body.style.overflow = '';
+  }
+  document.querySelectorAll('.backdrop').forEach(b => b.addEventListener('click', e => { if (e.target === b || e.target.closest('[data-close]')) closeModal(b.id); }));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && openModals.length) closeModal(openModals[openModals.length - 1]); });
+
+  // ---------- Card editor ----------
+  function openSheet(id) {
+    if (!posts.get(id)) return;
+    openId = id;
+    renderSheet();
+    openModal('sheet');
+    $('sheet').querySelector('.sheet').scrollTop = 0;
+  }
+  function closeSheet() {
+    $('player').querySelectorAll('video').forEach(v => v.pause());
+    $('player').innerHTML = '';
+    $('sheet').hidden = true;
+    const i = openModals.indexOf('sheet'); if (i >= 0) openModals.splice(i, 1);
+    if (!openModals.length) document.body.style.overflow = '';
+    openId = null;
+    render();
+  }
+  const currentVideo = () => $('player').querySelector('video');
+
+  function renderSheet() {
+    const p = posts.get(openId);
+    if (!p) return;
+    const player = $('player');
+    player.className = 'player' + (p.kind === 'short' ? ' short' : '');
+    player.innerHTML = '';
+    const showMsg = html => { player.querySelectorAll('video, img').forEach(el => el.remove()); player.insertAdjacentHTML('afterbegin', `<div class="msg">${html}</div>`); renderCover(); };
+    const slide = p.slides[0];
+    if (slide) {
+      const v = document.createElement('video');
+      v.controls = true; v.playsInline = true; v.preload = 'metadata';
+      if (p.thumb) v.poster = urlFor(p.thumb);
+      v.addEventListener('timeupdate', syncScrub);
+      v.addEventListener('loadedmetadata', e => {
+        syncScrub(e);
+        if (!v.videoWidth) unplayable();
+        else if (!p.duration && v.duration) { p.duration = v.duration; savePost(p); }
+      });
+      const unplayable = () => showMsg(`<p><b>${esc(slide.name || 'This video')}</b></p><p>This browser can't play this video format. ProRes and some iPhone (HEVC) videos only play in Safari. Open the previewer in Safari, or export an H.264 MP4.</p><p>You can still upload a thumbnail image below.</p>`);
+      v.addEventListener('error', () => { if (v.getAttribute('src')) unplayable(); });
+      loadMedia(slide).then(b => { if (!v.isConnected) return; if (b) v.src = urlFor(b); else showMsg(`<p><b>${esc(slide.name || 'This video')}</b></p><p>This file isn't saved in this browser anymore. Add the video again.</p>`); });
+      player.appendChild(v);
+    } else if (p.thumb) {
+      const img = document.createElement('img'); img.alt = ''; img.src = urlFor(p.thumb); player.appendChild(img);
+    } else {
+      player.innerHTML = `<div class="msg">${busy.has(p.id) ? '<p>Your video is being prepared. This card fills in when it’s done.</p>' : '<p>No video yet.</p><button class="btn primary" data-add-media>Add video or thumbnail</button>'}</div>`;
+    }
+    $('sTitle').value = p.title;
+    $('sViews').value = p.views;
+    $('sAge').value = p.age;
+    $('sLength').value = p.length;
+    $('sLength').placeholder = fmtDur(p.duration) || '0:00';
+    $('sCaption').value = p.caption;
+    $('sPosted').checked = p.posted;
+    $('mediaBtn').textContent = slide ? 'Replace video' : 'Add video';
+    document.querySelectorAll('#sheet .kind button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === p.kind)));
+    $('sheetBusy').hidden = !busy.has(p.id);
+    $('sheetBusy').textContent = busy.has(p.id) ? `${busy.get(p.id)}. Keep this page open.` : '';
+    fillSheetWhen();
+    renderCover();
+  }
+  function fillSheetWhen() {
+    const p = posts.get(openId);
+    if (!p) return;
+    const date = scheduleDates().get(openId);
+    $('sAge').placeholder = autoAge(p, date) || 'e.g. 2d ago';
+    if (p.posted) { $('sheetWhen').innerHTML = 'Published<small>Not part of the schedule</small>'; return; }
+    const n = queueOf(p.kind).indexOf(openId) + 1;
+    $('sheetWhen').innerHTML = `${fmtLong.format(date)} at ${fmtTime.format(date)}<small>${p.kind === 'short' ? 'Short' : 'Video'} #${n} in the queue · drag the card to change</small>`;
+  }
+
+  let previewing = false;
+  function renderCover() {
+    const p = posts.get(openId);
+    if (!p) return;
+    const v = currentVideo();
+    $('coverBox').className = 'cover' + (p.kind === 'short' ? ' short' : '');
+    $('coverPreview').innerHTML = p.thumb ? `<img alt="" src="${urlFor(p.thumb)}">` : placeholder(p);
+    previewing = false;
+    $('scrub').hidden = !v;
+    $('frameBtn').hidden = !v;
+    $('resetThumbBtn').hidden = !(p.customThumb && p.slides.length);
+    $('coverHint').textContent = v ? 'Upload a designed thumbnail, or play/scrub the video to a frame and tap “Use this frame”.' : 'Upload a designed thumbnail (1280 × 720 works best).';
+    syncScrub();
+  }
+  function previewFrame(v) {
+    if (!v.videoWidth) return;
+    let c = $('coverPreview').querySelector('canvas');
+    if (!c) { c = document.createElement('canvas'); $('coverPreview').innerHTML = ''; $('coverPreview').appendChild(c); }
+    const scale = Math.min(1, 480 / v.videoWidth);
+    c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    previewing = true;
+  }
+  function syncScrub(e) {
+    const v = currentVideo();
+    if (!v || (e && e.target !== v)) return;
+    if (v.duration) $('scrub').value = Math.round((v.currentTime / v.duration) * 1000);
+    if (e && e.type === 'timeupdate' && (previewing || !v.paused)) previewFrame(v);
+  }
+  $('scrub').addEventListener('input', e => {
+    const v = currentVideo();
+    if (!v || !v.duration) return;
+    v.pause();
+    v.currentTime = (e.target.value / 1000) * v.duration;
+    v.addEventListener('seeked', () => previewFrame(v), { once: true });
+  });
+  function setThumb(p, blob, custom) {
+    if (p.thumb && p.thumb !== blob) dropUrl(p.thumb);
+    p.thumb = blob; p.customThumb = custom;
+    savePost(p); render(); renderCover();
+    const v = currentVideo(); if (v && blob) v.poster = urlFor(blob);
+  }
+  $('frameBtn').addEventListener('click', async () => {
+    const p = posts.get(openId), v = currentVideo();
+    if (!p || !v || !v.videoWidth) { toast('Play or scrub the video to the frame you want first.'); return; }
+    v.pause();
+    const blob = await drawScaled(v, v.videoWidth, v.videoHeight);
+    if (blob) { setThumb(p, blob, true); toast('Thumbnail set.'); }
+  });
+  $('thumbBtn').addEventListener('click', () => $('thumbInput').click());
+  $('thumbInput').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    const p = posts.get(openId);
+    if (!f || !p) return;
+    setThumb(p, await imageThumb(f), true);
+    toast('Thumbnail set.');
+  });
+  $('resetThumbBtn').addEventListener('click', async () => {
+    const p = posts.get(openId); if (!p || !p.slides[0]) return;
+    const b = await loadMedia(p.slides[0]);
+    const info = b ? await videoInfo(b) : null;
+    setThumb(p, info && info.thumb, false);
+    toast('Thumbnail reset to a frame from the video.');
+  });
+  const bindField = (elId, key, rerender = true) => $(elId).addEventListener('input', e => {
+    const p = posts.get(openId); if (!p) return;
+    p[key] = e.target.value; savePost(p);
+    if (rerender) render();
+  });
+  bindField('sTitle', 'title'); bindField('sViews', 'views'); bindField('sAge', 'age'); bindField('sLength', 'length'); bindField('sCaption', 'caption', false);
+  document.querySelectorAll('#sheet .kind button').forEach(b => b.addEventListener('click', () => {
+    const p = posts.get(openId); if (!p) return;
+    p.kind = b.dataset.kind; p.autoKind = false; savePost(p);
+    renderSheet(); render();
+    toast(p.kind === 'short' ? 'Moved to Shorts.' : 'Moved to Videos.');
+  }));
+  $('sPosted').addEventListener('change', e => { const p = posts.get(openId); if (!p) return; p.posted = e.target.checked; savePost(p); render(); });
+
+  let mediaTarget = null;
+  const pickMediaFor = id => { mediaTarget = id; $('mediaInput').click(); };
+  $('mediaBtn').addEventListener('click', () => pickMediaFor(openId));
+  $('player').addEventListener('click', e => { if (e.target.closest('[data-add-media]')) pickMediaFor(openId); });
+  $('mediaInput').addEventListener('change', e => {
+    const files = [...e.target.files]; e.target.value = '';
+    const target = mediaTarget || openId; mediaTarget = null;
+    if (target && files.length) addMediaTo(target, files);
+  });
+  $('deleteBtn').addEventListener('click', e => {
+    const p = posts.get(openId); if (!p) return;
+    confirmTap(e.currentTarget, 'Tap again to delete', () => {
+      closeSheet();
+      dropUrl(p.thumb); p.slides.forEach(forgetMedia);
+      posts.delete(p.id);
+      order = order.filter(id => id !== p.id);
+      persist(store.deletePost(p.id));
+      saveOrder(); render();
+      toast('Card deleted.');
+    });
+  });
+
+  function confirmTap(btn, armedHTML, run) {
+    if (btn.dataset.armed) {
+      clearTimeout(btn._disarm);
+      btn.innerHTML = btn.dataset.original; delete btn.dataset.armed; btn.classList.remove('armed');
+      run(); return;
+    }
+    btn.dataset.original = btn.innerHTML; btn.dataset.armed = '1'; btn.innerHTML = armedHTML; btn.classList.add('armed');
+    btn._disarm = setTimeout(() => { if (!btn.dataset.armed) return; btn.innerHTML = btn.dataset.original; delete btn.dataset.armed; btn.classList.remove('armed'); }, 3000);
+  }
+
+  // ---------- Toolbar, tabs, sorting ----------
+  function setView(v) {
+    view = v;
+    document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+    $('channelView').hidden = v !== 'channel';
+    $('scheduleView').hidden = v !== 'schedule';
+    try { localStorage.setItem(APP + '-view', v); } catch {}
+  }
+  function setTab(t) {
+    tab = t === 'shorts' ? 'shorts' : 'videos';
+    document.querySelectorAll('.tab[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t || (t === 'home' && b.dataset.tab === 'home'))));
+    render();
+  }
+  function setSort(s) {
+    sort = s;
+    document.querySelectorAll('[data-sort]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sort === s)));
+    render();
+  }
+  document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+  document.querySelectorAll('.tab[data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  document.querySelectorAll('[data-sort]').forEach(b => b.addEventListener('click', () => setSort(b.dataset.sort)));
+
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-open-add], [data-open-paste], [data-pick], [data-add-empty], [data-open-backup]');
+    if (!t) return;
+    if (t.matches('[data-open-add]')) openModal('addMenu');
+    else if (t.matches('[data-open-paste]')) { closeModal('addMenu'); openModal('pasteModal'); setTimeout(() => $('pasteText').focus(), 50); }
+    else if (t.matches('[data-pick]')) { closeModal('addMenu'); $('fileInput').click(); }
+    else if (t.matches('[data-add-empty]')) {
+      closeModal('addMenu');
+      const p = newPost({ kind: t.dataset.addEmpty });
+      posts.set(p.id, p); savePost(p);
+      order.unshift(p.id); saveOrder();
+      setView('channel'); setTab(p.kind === 'short' ? 'shorts' : 'videos');
+      if (sort !== 'latest') setSort('latest');
+      openSheet(p.id);
+      setTimeout(() => $('sTitle').focus(), 60);
+    } else if (t.matches('[data-open-backup]')) {
+      $('restoreConfirm').hidden = true; pendingRestore = null; showBackupStatus('');
+      renderLastBackup(); openModal('backupModal');
+    }
+  });
+  $('fileInput').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) { setView('channel'); addFiles(f); } });
+  $('pasteCreate').addEventListener('click', () => {
+    const rows = parseList($('pasteText').value);
+    if (!rows.length) { toast('Paste at least one line.'); return; }
+    const ids = rows.map(r => { const p = newPost(r); posts.set(p.id, p); savePost(p); return p.id; });
+    order = ids.concat(order); saveOrder();
+    $('pasteText').value = ''; closeModal('pasteModal');
+    setView('channel');
+    const shorts = rows.filter(r => r.kind === 'short').length;
+    setTab(shorts === rows.length ? 'shorts' : 'videos');
+    if (sort !== 'latest') setSort('latest');
+    toast(`Created ${ids.length} cards${shorts ? ` (${shorts} in Shorts)` : ''}. Drop a video or thumbnail onto any card to fill it.`, 5000);
+  });
+
+  // ---------- Channel header editing ----------
+  const fields = { pName: 'name', pHandle: 'handle', pSubs: 'subs', pCount: 'count', pDesc: 'desc', pLink: 'link', pLinkExtra: 'linkExtra' };
+  let profileTimer;
+  const saveProfile = () => { clearTimeout(profileTimer); profileTimer = setTimeout(() => persist(store.set('profile', profile)), 300); };
+  for (const [elId, key] of Object.entries(fields)) {
+    const el = $(elId);
+    el.addEventListener('input', () => { profile[key] = el.textContent.trim(); saveProfile(); });
+    if (key !== 'desc') el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+  }
+  $('pCount').addEventListener('blur', () => { if (!profile.count) $('pCount').textContent = String(posts.size); });
+  $('descMore').addEventListener('click', () => { $('descWrap').classList.add('open'); $('pDesc').focus(); });
+  $('pDesc').addEventListener('blur', () => $('descWrap').classList.remove('open'));
+  $('verifiedBtn').addEventListener('click', () => { profile.verified = !profile.verified; $('verifiedBtn').setAttribute('aria-pressed', String(profile.verified)); saveProfile(); });
+  $('avatar').addEventListener('click', () => $('avatarInput').click());
+  $('avatarInput').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    if (avatarBlob) dropUrl(avatarBlob);
+    avatarBlob = await imageThumb(f, 400);
+    persist(store.set('avatar', avatarBlob)); renderImages();
+  });
+  $('bannerBtn').addEventListener('click', () => $('bannerInput').click());
+  $('bannerInput').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    if (bannerBlob) dropUrl(bannerBlob);
+    bannerBlob = await imageThumb(f, 2560);
+    persist(store.set('banner', bannerBlob)); renderImages();
+  });
+  $('bannerRemove').addEventListener('click', e => confirmTap(e.currentTarget, 'Tap again', () => {
+    dropUrl(bannerBlob); bannerBlob = null; persist(store.set('banner', null)); renderImages();
+  }));
+
+  // Schedule settings
+  function onScheduleChange() {
+    for (const [k, pre] of [['video', 'v'], ['short', 's']]) {
+      schedule[k] = {
+        start: $(pre + 'Start').value || todayISO(),
+        time: $(pre + 'Time').value || '12:00',
+        every: Math.min(60, Math.max(1, parseInt($(pre + 'Every').value, 10) || 1)),
+      };
+    }
+    persist(store.set('schedule', schedule)); render();
+  }
+  ['vStart', 'vTime', 'vEvery', 'sStart', 'sTime', 'sEvery'].forEach(id => $(id).addEventListener('change', onScheduleChange));
+  $('compressToggle').addEventListener('change', e => {
+    settings.compress = e.target.checked; persist(store.set('settings', settings));
+    toast(settings.compress ? 'New videos will be compressed.' : 'New videos will be kept at full size.');
+  });
+
+  // Files dragged in from the computer: onto a card fills it, anywhere else adds new cards.
+  let dragDepth = 0, dropCard = null;
+  const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].some(t => t === 'Files' || t === 'text/uri-list');
+  const markDrop = el => { if (dropCard === el) return; dropCard && dropCard.classList.remove('drop-target'); dropCard = el; el && el.classList.add('drop-target'); };
+  window.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('dropOverlay').hidden = false; });
+  window.addEventListener('dragover', e => { if (!hasFiles(e)) return; e.preventDefault(); markDrop(e.target.closest && e.target.closest('.vcard[data-id]')); });
+  window.addEventListener('dragleave', e => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; $('dropOverlay').hidden = true; markDrop(null); } });
+  window.addEventListener('drop', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); dragDepth = 0; $('dropOverlay').hidden = true;
+    const card = e.target.closest && e.target.closest('.vcard[data-id]');
+    markDrop(null);
+    if (!e.dataTransfer.files.length) { toast('That came through as a link, not a file. Download it to your computer first, then drag it in.', 8000); return; }
+    if (openId && !$('sheet').hidden) addMediaTo(openId, e.dataTransfer.files);
+    else if (card) addMediaTo(card.dataset.id, e.dataTransfer.files);
+    else { setView('channel'); addFiles(e.dataTransfer.files); }
+  });
+
+  let toastTimer;
+  function toast(msg, ms = 2800) {
+    const t = $('toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+  }
+
+  // ---------- Backup (one .zip: plan.json plus every file, stored uncompressed) ----------
+  const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(bytes) { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  async function buildZip(entries, onEach) {
+    const enc = new TextEncoder(), parts = [], central = [];
+    let offset = 0;
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    for (let i = 0; i < entries.length; i++) {
+      const { name, blob } = entries[i];
+      const nameBytes = enc.encode(name);
+      const crc = crc32(new Uint8Array(await blob.arrayBuffer()));
+      const size = blob.size;
+      if (offset + size > 0xF0000000) throw new Error('too_big');
+      const head = new DataView(new ArrayBuffer(30));
+      head.setUint32(0, 0x04034b50, true); head.setUint16(4, 20, true); head.setUint16(6, 0x0800, true);
+      head.setUint16(10, dosTime, true); head.setUint16(12, dosDate, true);
+      head.setUint32(14, crc, true); head.setUint32(18, size, true); head.setUint32(22, size, true); head.setUint16(26, nameBytes.length, true);
+      parts.push(head.buffer, nameBytes, blob);
+      const cd = new DataView(new ArrayBuffer(46));
+      cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true); cd.setUint16(8, 0x0800, true);
+      cd.setUint16(12, dosTime, true); cd.setUint16(14, dosDate, true);
+      cd.setUint32(16, crc, true); cd.setUint32(20, size, true); cd.setUint32(24, size, true); cd.setUint16(28, nameBytes.length, true); cd.setUint32(42, offset, true);
+      central.push(cd.buffer, nameBytes);
+      offset += 30 + nameBytes.length + size;
+      onEach && onEach(i + 1, entries.length);
+    }
+    const cdSize = central.reduce((n, b) => n + b.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+  }
+  async function readZip(file) {
+    const tailStart = Math.max(0, file.size - 65557);
+    const tail = new DataView(await file.slice(tailStart).arrayBuffer());
+    let eocd = -1;
+    for (let i = tail.byteLength - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error('not_zip');
+    const count = tail.getUint16(eocd + 10, true), cdSize = tail.getUint32(eocd + 12, true), cdOffset = tail.getUint32(eocd + 16, true);
+    const cd = new DataView(await file.slice(cdOffset, cdOffset + cdSize).arrayBuffer());
+    const dec = new TextDecoder(), out = new Map();
+    for (let i = 0, p = 0; i < count; i++) {
+      if (cd.getUint32(p, true) !== 0x02014b50) throw new Error('not_zip');
+      const method = cd.getUint16(p + 10, true), size = cd.getUint32(p + 20, true);
+      const nameLen = cd.getUint16(p + 28, true), extraLen = cd.getUint16(p + 30, true), commentLen = cd.getUint16(p + 32, true);
+      const local = cd.getUint32(p + 42, true);
+      const name = dec.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nameLen));
+      p += 46 + nameLen + extraLen + commentLen;
+      if (method !== 0) continue;
+      const lh = new DataView(await file.slice(local, local + 30).arrayBuffer());
+      const start = local + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+      out.set(name, file.slice(start, start + size));
+    }
+    return out;
+  }
+  const extFor = (blob, fallback) => (extOf(blob) && extOf(blob) !== (blob.name || '').toLowerCase() ? extOf(blob)
+    : ({ 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[blob.type] || fallback));
+  const showBackupStatus = msg => { $('backupStatus').hidden = !msg; $('backupStatus').textContent = msg || ''; };
+  async function renderLastBackup() {
+    let at = null; try { at = await store.get('lastBackup'); } catch {}
+    $('lastBackup').textContent = at ? `Last saved ${fmtDateTime.format(new Date(at))}.` : 'No backup saved yet.';
+  }
+  async function offerFile(filename, blob) {
+    const claudeHost = window.claude && typeof window.claude.use === 'function';
+    const downloads = claudeHost ? await window.claude.use('downloads').catch(() => null) : null;
+    if (downloads) { await downloads.save({ filename, data: blob }); return; }
+    if (claudeHost) throw { code: 'unavailable' };
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+  }
+  async function saveBackup() {
+    const btn = $('backupSave');
+    btn.disabled = true;
+    showBackupStatus('Preparing backup…');
+    try {
+      const entries = [];
+      const plan = { app: APP, version: 1, exportedAt: new Date().toISOString(), order, profile, schedule, settings, posts: [], avatar: null, banner: null };
+      for (const id of order) {
+        const p = posts.get(id);
+        const rec = { ...p, thumb: null, slides: [] };
+        if (p.thumb) { rec.thumb = { file: `thumbs/${p.id}.${extFor(p.thumb, 'jpg')}`, type: p.thumb.type || 'image/jpeg' }; entries.push({ name: rec.thumb.file, blob: p.thumb }); }
+        for (const slide of p.slides) {
+          const blob = await loadMedia(slide);
+          if (!blob) continue;
+          const file = `media/${slide.id}.${extFor(slide, 'mp4')}`;
+          rec.slides.push({ ...slide, file }); entries.push({ name: file, blob });
+        }
+        plan.posts.push(rec);
+      }
+      if (avatarBlob) { plan.avatar = { file: `avatar.${extFor(avatarBlob, 'jpg')}`, type: avatarBlob.type || 'image/jpeg' }; entries.push({ name: plan.avatar.file, blob: avatarBlob }); }
+      if (bannerBlob) { plan.banner = { file: `banner.${extFor(bannerBlob, 'jpg')}`, type: bannerBlob.type || 'image/jpeg' }; entries.push({ name: plan.banner.file, blob: bannerBlob }); }
+      entries.unshift({ name: 'plan.json', blob: new Blob([JSON.stringify(plan, null, 1)], { type: 'application/json' }) });
+      const zip = await buildZip(entries, (n, total) => showBackupStatus(`Preparing backup… ${n} of ${total} files`));
+      const mb = (zip.size / 1048576).toFixed(1);
+      showBackupStatus(`Backup ready (${mb} MB). Confirm the save to keep it.`);
+      const handle = (profile.handle || 'channel').replace(/^@/, '').replace(/[^\w.-]+/g, '-') || 'channel';
+      await offerFile(`${handle}-youtube-plan-${todayISO()}.zip`, zip);
+      const at = Date.now();
+      persist(store.set('lastBackup', at));
+      $('lastBackup').textContent = `Last saved ${fmtDateTime.format(new Date(at))}.`;
+      showBackupStatus(`Saved ${plan.posts.length} cards (${mb} MB). Keep the file somewhere safe, like iCloud Drive or Google Drive.`);
+    } catch (err) {
+      const code = err && err.code;
+      showBackupStatus(
+        code === 'declined' ? 'Backup not saved.' :
+        code === 'rate_limited' ? 'A save prompt is already open. Finish that one first.' :
+        code === 'too_large' ? 'This backup is too large to save here. Try from a computer.' :
+        err && err.message === 'too_big' ? 'This plan is over 4 GB, too big for one backup. Turn on Compress videos and re-add the largest videos.' :
+        code ? "Saving files isn't available in this view. Open the previewer in a browser to save a backup." :
+        "Couldn't create the backup. Try again, or reload the page first.");
+    } finally { btn.disabled = false; }
+  }
+  let pendingRestore = null;
+  async function pickRestore(file) {
+    showBackupStatus('Reading backup…');
+    try {
+      const files = await readZip(file);
+      const planBlob = files.get('plan.json');
+      if (!planBlob) throw new Error('not_backup');
+      const plan = JSON.parse(await planBlob.text());
+      if (plan.app !== APP || !Array.isArray(plan.posts)) throw new Error('not_backup');
+      pendingRestore = { plan, files };
+      const when = plan.exportedAt ? fmtDateTime.format(new Date(plan.exportedAt)) : 'an unknown date';
+      $('restoreText').textContent = `Replace everything in the previewer with this backup from ${when} (${plan.posts.length} cards)? What's in the previewer now will be removed.`;
+      $('restoreConfirm').hidden = false;
+      showBackupStatus('');
+    } catch {
+      pendingRestore = null;
+      showBackupStatus("That file isn't a YouTube Previewer backup. Choose a .zip saved with “Save backup file”.");
+    }
+  }
+  async function runRestore() {
+    if (!pendingRestore) return;
+    const { plan, files } = pendingRestore;
+    const asFile = (ref, name) => { const b = ref && files.get(ref.file); return b ? new File([b], name || ref.file.split('/').pop(), { type: ref.type || '' }) : null; };
+    const media = [];
+    const restored = plan.posts.map(rec => {
+      const p = { ...rec, thumb: asFile(rec.thumb), slides: [] };
+      for (const s of rec.slides || []) {
+        const blob = asFile(s, s.name);
+        if (!blob) continue;
+        media.push([s.id, blob]);
+        p.slides.push({ id: s.id, type: s.type, name: s.name });
+      }
+      return p;
+    });
+    const kv = [['order', plan.order || restored.map(p => p.id)], ['profile', plan.profile || {}], ['schedule', plan.schedule || {}], ['settings', plan.settings || {}]];
+    const avatar = asFile(plan.avatar); if (avatar) kv.push(['avatar', avatar]);
+    const banner = asFile(plan.banner); if (banner) kv.push(['banner', banner]);
+    showBackupStatus('Restoring…');
+    try {
+      await store.replaceAll({ posts: restored, media, kv });
+      try { localStorage.removeItem(APP + '-booting'); } catch {}
+      showBackupStatus('Restored. Reloading…');
+      setTimeout(() => location.reload(), 400);
+    } catch { showBackupStatus("Couldn't restore the backup in this browser. Nothing was changed."); }
+  }
+  $('backupSave').addEventListener('click', saveBackup);
+  $('backupLoad').addEventListener('click', () => $('backupInput').click());
+  $('backupInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) pickRestore(f); });
+  $('restoreCancel').addEventListener('click', () => { pendingRestore = null; $('restoreConfirm').hidden = true; });
+  $('restoreGo').addEventListener('click', runRestore);
+
+  // ---------- Boot ----------
+  // A flag still set at the next launch means the last one never finished (e.g. the tab crashed).
+  let lastLaunchFailed = false;
+  try { lastLaunchFailed = localStorage.getItem(APP + '-booting') === '1'; localStorage.setItem(APP + '-booting', '1'); } catch {}
+  $('recover').hidden = !lastLaunchFailed;
+  window.addEventListener('pagehide', () => { try { localStorage.removeItem(APP + '-booting'); } catch {} });
+  $('recoverOk').addEventListener('click', () => { $('recover').hidden = true; });
+  $('recoverClear').addEventListener('click', e => confirmTap(e.currentTarget, 'Tap again to erase everything', () => {
+    try { localStorage.removeItem(APP + '-booting'); } catch {}
+    const del = indexedDB.deleteDatabase(APP);
+    del.onsuccess = del.onerror = del.onblocked = () => location.reload();
+  }));
+  (async () => {
+    try {
+      const [saved, savedOrder, savedProfile, savedSchedule, savedSettings, savedAvatar, savedBanner] = await Promise.all([
+        store.allPosts(), store.get('order'), store.get('profile'), store.get('schedule'), store.get('settings'), store.get('avatar'), store.get('banner'),
+      ]);
+      for (const p of saved) posts.set(p.id, { ...newPost({}), ...p });
+      const known = new Set(posts.keys());
+      order = (savedOrder || []).filter(id => known.has(id));
+      for (const id of known) if (!order.includes(id)) order.unshift(id);
+      if (savedProfile) profile = { ...profile, ...savedProfile };
+      if (savedSchedule) schedule = { video: { ...schedule.video, ...savedSchedule.video }, short: { ...schedule.short, ...savedSchedule.short } };
+      if (savedSettings) settings = { ...settings, ...savedSettings };
+      avatarBlob = savedAvatar || null;
+      bannerBlob = savedBanner || null;
+    } catch {
+      toast("Saving isn't available in this browser. Your plan will reset on refresh.", 5000);
+    }
+    let v = 'channel';
+    try { v = localStorage.getItem(APP + '-view') || 'channel'; } catch {}
+    $('compressToggle').checked = settings.compress;
+    renderProfile();
+    renderScheduleInputs();
+    setView(v === 'schedule' ? 'schedule' : 'channel');
+    setTab('videos');
+    setTimeout(() => { try { localStorage.removeItem(APP + '-booting'); } catch {} }, 4000);
+  })();
+})();
+</script>
+</body>
+</html>

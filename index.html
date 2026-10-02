@@ -143,6 +143,10 @@
   .tile .when { left: 4px; }
   .tile .trial { right: 4px; background: rgba(120, 60, 220, .85); }
   .tile .when.posted { background: rgba(0, 149, 246, .85); }
+  .tile .busy {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 6px 6px; text-align: center;
+    background: linear-gradient(transparent, rgba(0,0,0,.75)); color: #fff; font-size: 11px; font-weight: 600;
+  }
   .tile.drop-target { outline: 3px solid var(--accent); outline-offset: -3px; }
   .ph {
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -239,6 +243,9 @@
   .menu button:hover { background: var(--chip); }
   .menu b { display: block; font-weight: 600; }
   .menu small { color: var(--muted); }
+  .menu-setting { gap: 16px; margin: 0 8px 12px; padding: 12px 10px 4px; border-top: 1px solid var(--line); }
+  .menu-setting b { display: block; font-weight: 600; }
+  .menu-setting small { color: var(--muted); }
   .menu .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; flex: none; }
 
   /* Post viewer: swipeable slides */
@@ -467,6 +474,10 @@
         <span><b>Paste a list</b><small>Turn your numbered post list into cells</small></span>
       </button>
     </div>
+    <div class="menu-setting switch-row">
+      <span><b>Compress videos</b><small>Makes a lighter 720p copy so the planner stays fast. Your original files aren't changed.</small></span>
+      <span class="switch"><input type="checkbox" id="compressToggle" aria-label="Compress videos"><span></span></span>
+    </div>
   </div>
 </div>
 
@@ -532,6 +543,7 @@
       <div class="sheet-btns">
         <button class="btn" id="addMediaBtn">Add video or photo</button>
       </div>
+      <div class="hint" id="sheetBusy" hidden></div>
       <div class="sheet-btns">
         <button class="btn danger" id="deleteBtn">Delete cell</button>
         <button class="btn" data-close>Done</button>
@@ -650,6 +662,7 @@
   let profile = { username: 'yourbrand', name: '', verified: false, category: '', bio: '', link: '', followers: '', following: '' };
   let schedule = { start: todayISO(), time: '18:00', every: 1 };
   let avatarBlob = null;
+  let settings = { compress: true };
   const urls = new Map();      // blob -> object URL cache
   let openId = null;
   let currentTab = 'grid';
@@ -803,26 +816,130 @@
       'You can still set a cover with “Upload image”.', 12000);
   }
 
+  // ---------- Video compression (runs in the browser with WebCodecs, via Mediabunny) ----------
+  // Big camera files make the planner slow and can crash phones, so videos get a lighter 720p copy.
+  // H.264 MP4 where the browser can encode it (Chrome, Safari, Edge); WebM otherwise.
+  const MEDIABUNNY_URL = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.0/dist/bundles/mediabunny.min.mjs';
+  const MAX_SIDE = 1280;
+  const VIDEO_BITRATE = 2_500_000;
+  const SKIP_BELOW = 12 * 1024 * 1024; // small H.264 files are already light enough
+  let mediabunny = null;
+  const loadMediabunny = () => (mediabunny ||= import(MEDIABUNNY_URL).catch(err => { mediabunny = null; throw err; }));
+  const warned = new Set();
+  const warnOnce = (key, msg) => { if (!warned.has(key)) { warned.add(key); toast(msg, 8000); } };
+
+  // Returns the compressed file, or the original when it's already small, can't be decoded here,
+  // or compressing wouldn't make it smaller.
+  async function compressVideo(file, onProgress) {
+    if (!settings.compress || typeof VideoEncoder === 'undefined') return file;
+    let M, input;
+    try { M = await loadMediabunny(); } catch {
+      warnOnce('compressor', "Couldn't load the video compressor, so this video is kept at full size.");
+      return file;
+    }
+    try {
+      input = new M.Input({ formats: M.ALL_FORMATS, source: new M.BlobSource(file) });
+      const track = await input.getPrimaryVideoTrack();
+      if (!track) return file;
+      if (track.codec === 'avc' && file.size < SKIP_BELOW) return file;
+      if (!(await track.canDecode())) return file;
+      const useAvc = await M.canEncodeVideo('avc');
+      const codec = useAvc ? 'avc' : (await M.canEncodeVideo('vp9')) ? 'vp9' : null;
+      if (!codec) return file;
+      const [canAac, canOpus] = await Promise.all([M.canEncodeAudio('aac'), M.canEncodeAudio('opus')]);
+      const scale = Math.min(1, MAX_SIDE / Math.max(track.displayWidth, track.displayHeight));
+      const even = n => Math.max(2, Math.round(n / 2) * 2);
+      const output = new M.Output({
+        format: useAvc ? new M.Mp4OutputFormat({ fastStart: 'in-memory' }) : new M.WebMOutputFormat(),
+        target: new M.BufferTarget(),
+      });
+      const conversion = await M.Conversion.init({
+        input, output, tracks: 'primary',
+        video: {
+          width: even(track.displayWidth * scale), height: even(track.displayHeight * scale), fit: 'contain',
+          codec, bitrate: VIDEO_BITRATE, forceTranscode: true,
+        },
+        audio: t => (useAvc && t.codec === 'aac') ? {}
+          : useAvc && canAac ? { codec: 'aac', bitrate: 128000 }
+          : canOpus ? { codec: 'opus', bitrate: 96000 }
+          : { discard: true },
+      });
+      if (!conversion.isValid) return file;
+      conversion.onProgress = pr => onProgress(pr);
+      await conversion.execute();
+      const buf = output.target.buffer;
+      if (!buf || buf.byteLength >= file.size) return file;
+      const base = (file.name || 'video').replace(/\.[^.]+$/, '');
+      return new File([buf], `${base}.${useAvc ? 'mp4' : 'webm'}`, { type: useAvc ? 'video/mp4' : 'video/webm', lastModified: file.lastModified });
+    } catch (err) {
+      console.warn('Video compression failed; keeping the original file.', err);
+      return file;
+    } finally {
+      try { input && input.dispose(); } catch {}
+    }
+  }
+
+  // Cells that are still being prepared show a progress label.
+  const busy = new Map(); // post id -> label
+  function setBusy(id, label) {
+    if (label == null) busy.delete(id); else busy.set(id, label);
+    const spans = document.querySelectorAll(`.tile[data-id="${id}"] .busy`);
+    if (label != null && !spans.length) render();
+    spans.forEach(el => { el.textContent = label || ''; el.hidden = label == null; });
+    if (openId === id) { $('sheetBusy').hidden = label == null; $('sheetBusy').textContent = label ? `${label}. Keep this page open.` : ''; }
+  }
+
+  // Compress any videos, then add the files to the cell as slides.
+  async function fillPost(p, files) {
+    const prepared = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (isVideo(f) && settings.compress) {
+        const label = files.length > 1 ? `Compressing ${i + 1} of ${files.length}` : 'Compressing';
+        setBusy(p.id, `${label}…`);
+        prepared.push(await compressVideo(f, pr => setBusy(p.id, `${label} ${Math.round(pr * 100)}%`)));
+      } else {
+        prepared.push(f);
+      }
+    }
+    setBusy(p.id, null);
+    if (!posts.has(p.id)) return false; // deleted while compressing
+    const wasEmpty = !p.slides.length;
+    p.slides.push(...prepared.map(storeMedia));
+    if (p.slides.length > 1) p.kind = 'carousel';
+    else if (wasEmpty && isVideo(prepared[0]) && p.kind === 'post') p.kind = 'reel';
+    if (wasEmpty) await autoThumb(p);
+    savePost(p);
+    render();
+    if (openId === p.id) renderSheet();
+    return true;
+  }
+  const workingToast = files => toast(files.some(isVideo) && settings.compress
+    ? 'Compressing video so the planner stays fast. Keep this page open.'
+    : `Adding ${files.length} ${files.length === 1 ? 'file' : 'files'}…`, 600000);
+
   async function addFiles(fileList, mode = 'each') {
     const files = mediaOnly(fileList);
     if (!files.length) { toast('Only videos and photos can be added.'); return; }
-    toast(`Adding ${files.length} ${files.length === 1 ? 'file' : 'files'}…`, 60000);
     const groups = mode === 'carousel' ? [files] : files.map(f => [f]);
-    const ids = [], unplayable = [];
-    for (const g of groups) {
-      const p = newPost({ kind: kindFor(g), slides: g.map(storeMedia) });
-      await autoThumb(p);
-      if (cantPreview(p)) unplayable.push(g[0].name);
+    // Cells appear right away; each fills in when its files are ready.
+    const created = groups.map(g => {
+      const p = newPost({ kind: kindFor(g) });
       posts.set(p.id, p);
-      ids.push(p.id);
-      persist(store.putPost(p));
-    }
-    insertAtTop(ids); // first file picked lands top-left, same as reading the grid
+      savePost(p);
+      return [p, g];
+    });
+    insertAtTop(created.map(([p]) => p.id)); // first file picked lands top-left, same as reading the grid
     render();
+    workingToast(files);
+    const unplayable = [];
+    for (const [p, g] of created) {
+      if ((await fillPost(p, g)) && cantPreview(p)) unplayable.push(g[0].name);
+    }
     if (unplayable.length) warnUnplayable(unplayable);
     else if (mode === 'carousel') toast(`Carousel with ${files.length} slides added.`);
-    else if (ids.some(id => isReel(posts.get(id)))) toast(`Added ${ids.length}. Reels show on your grid; tap one to make it Reels-tab only.`, 4500);
-    else toast(`Added ${ids.length}. Drag cells to rearrange.`);
+    else if (created.some(([p]) => isReel(p))) toast(`Added ${created.length}. Reels show on your grid; tap one to make it Reels-tab only.`, 4500);
+    else toast(`Added ${created.length}. Drag cells to rearrange.`);
   }
 
   // Fill one cell with media (from the picker or a file dropped on it).
@@ -835,15 +952,9 @@
       toast(`${names ? `“${names}” isn't` : "That isn't"} a video or photo this planner recognizes.`, 6000);
       return;
     }
-    toast('Adding…', 60000);
     const wasEmpty = p.slides.length === 0;
-    p.slides.push(...files.map(storeMedia));
-    if (p.slides.length > 1) p.kind = 'carousel';
-    else if (wasEmpty && isVideo(files[0]) && p.kind === 'post') p.kind = 'reel';
-    if (wasEmpty) await autoThumb(p);
-    savePost(p);
-    render();
-    if (openId === id) renderSheet();
+    workingToast(files);
+    if (!(await fillPost(p, files))) return;
     if (wasEmpty && cantPreview(p)) warnUnplayable([files[0].name]);
     else if (wasEmpty && isReel(p)) toast('Reel added to your grid. Use “Show on profile grid” to make it Reels-tab only.', 4500);
     else toast(wasEmpty ? 'Cell filled.' : `Added ${files.length} more ${files.length === 1 ? 'slide' : 'slides'}.`);
@@ -895,7 +1006,8 @@
     return (p.thumb ? `<img alt="" draggable="false" src="${urlFor(p.thumb)}">` : placeholder(p)) +
       (kindIcon(p) ? `<span class="kind">${kindIcon(p)}</span>` : '') +
       (p.posted ? '<span class="when posted">Live</span>' : when ? `<span class="when">${fmtShort.format(when)}</span>` : '') +
-      (p.kind === 'trial' ? '<span class="trial">Trial</span>' : '');
+      (p.kind === 'trial' ? '<span class="trial">Trial</span>' : '') +
+      (busy.has(p.id) ? `<span class="busy">${esc(busy.get(p.id))}</span>` : '');
   }
 
   function render() {
@@ -1167,8 +1279,12 @@
     slidesEl.innerHTML = '';
     if (!p.slides.length) {
       slidesEl.innerHTML = `<div class="slide-empty" style="background:hsl(${hue(p.id)} 22% 30%)"><div>` +
-        `<p>${esc(p.title || 'Empty cell')}</p><button class="btn" data-add-media>Add video or photo</button></div></div>`;
+        `<p>${esc(p.title || 'Empty cell')}</p>` +
+        (busy.has(p.id) ? '<p>Your video is being compressed. This cell fills in when it’s done.</p>' : '<button class="btn" data-add-media>Add video or photo</button>') +
+        '</div></div>';
     }
+    $('sheetBusy').hidden = !busy.has(p.id);
+    $('sheetBusy').textContent = busy.has(p.id) ? `${busy.get(p.id)}. Keep this page open.` : '';
     const showProblem = (s, html) => {
       s.querySelectorAll('video, img').forEach(el => el.remove());
       const msg = document.createElement('div');
@@ -1466,6 +1582,12 @@
     renderAvatar();
   });
 
+  $('compressToggle').addEventListener('change', e => {
+    settings.compress = e.target.checked;
+    persist(store.set('settings', settings));
+    toast(settings.compress ? 'New videos will be compressed.' : 'New videos will be kept at full size.');
+  });
+
   // Schedule settings
   function onScheduleChange() {
     schedule = {
@@ -1547,9 +1669,10 @@
   }));
   (async () => {
     try {
-      const [saved, savedOrder, savedProfile, savedSchedule, savedAvatar] = await Promise.all([
-        store.allPosts(), store.get('order'), store.get('profile'), store.get('schedule'), store.get('avatar'),
+      const [saved, savedOrder, savedProfile, savedSchedule, savedAvatar, savedSettings] = await Promise.all([
+        store.allPosts(), store.get('order'), store.get('profile'), store.get('schedule'), store.get('avatar'), store.get('settings'),
       ]);
+      if (savedSettings) settings = { ...settings, ...savedSettings };
       for (const p of saved) {
         if (normalize(p)) savePost(p);
         posts.set(p.id, p);
@@ -1565,6 +1688,7 @@
     }
     let tab = 'grid';
     try { tab = localStorage.getItem('feed-planner-tab') || 'grid'; } catch {}
+    $('compressToggle').checked = settings.compress;
     renderProfile();
     renderScheduleInputs();
     setTab(['grid', 'reels', 'schedule'].includes(tab) ? tab : 'grid');

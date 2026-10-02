@@ -11,4 +11,6 @@ A phone-style profile grid for planning posts. Open `index.html` in a browser (p
 - **Schedule**: set a start date, time and "post every N days". The bottom of the grid posts first, and dates follow the grid order, so dragging a cell reschedules it. Mark posts as **Already posted** to take them out of the queue.
 - **Profile**: tap the name, verified badge, category, bio, link, follower counts or profile photo to edit them.
 
+- **Videos are compressed automatically** to a lighter 720p copy (H.264 MP4 in Chrome, Safari and Edge) so the planner stays fast. Your original files are not changed. Turn it off under **Add**.
+
 Everything is saved in the browser you use (IndexedDB), so it survives refreshes but stays on that device and browser.

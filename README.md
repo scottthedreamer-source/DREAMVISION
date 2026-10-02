@@ -1,6 +1,6 @@
 # DreamVision Feed Planner
 
-A phone-style profile grid for planning posts. Open `index.html` in a browser (phone or desktop); nothing to install.
+A phone-style profile grid for planning posts. Open `Instagram Previewer.html` in a browser (phone or desktop); nothing to install.
 
 - **Start from your post list**: tap **Paste list** and paste a numbered list (one post per line). Line 1 becomes the top-left cell. Words like *carousel*, *trial* or *post* set the type; anything else becomes a reel.
 - **Fill a cell**: tap it and add a video or photo, or drag a file from your computer straight onto the cell. Add more files to make it a carousel.

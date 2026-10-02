@@ -28,3 +28,14 @@ Everything is saved in the browser you use (IndexedDB), so it survives refreshes
 - **Latest / Popular / Oldest** sort like YouTube (Popular uses the view counts you type). Drag cards to rearrange while on Latest.
 - **Schedule**: separate start date, time and spacing for Videos and Shorts; the last card in each tab goes out first.
 - Video compression and **Backup** work the same as in the Instagram Previewer.
+
+# LinkedIn Previewer
+
+`LinkedIn Previewer.html` shows how posts will read in the feed, with your profile on top.
+
+- **Profile**: click the banner, photo, name, headline, company, location or connections to change them. Switch between **Person** (round photo, Connect) and **Company** (square logo, Follow).
+- **Posts**: each post shows your photo, name, headline, the link under your name, the time, the text cut at "… more", images (LinkedIn-style layouts for 1 to 20 images) or one video, and reaction/comment/repost counts.
+- **Desktop / Phone** toggle: "… more" cuts at a different spot on each. Turn on **Show where "…more" cuts the text** to mark the fold.
+- **Edit a post** to see a live preview while you write; the counter warns past LinkedIn's 3,000 characters.
+- **Paste list**: one post idea per line, or full drafts separated by a line with `---`.
+- Drag posts to reorder (top = newest), schedule, video compression and **Backup** work like the other previewers.

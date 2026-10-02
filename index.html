@@ -138,6 +138,12 @@
   }
   .ph span { font-weight: 800; font-size: 12px; line-height: 1.15; text-transform: uppercase; overflow-wrap: anywhere; }
   .ph small { font-size: 10px; opacity: .75; display: flex; align-items: center; gap: 4px; }
+  .off-grid-note { display: block; width: 100%; padding: 12px 16px; text-align: center; }
+  .off-grid-note:hover { color: var(--fg); }
+  .tile .reels-only {
+    position: absolute; top: 6px; left: 6px; padding: 1px 6px; border-radius: 4px;
+    background: var(--badge); color: #fff; font-size: 10px; font-weight: 600;
+  }
   .tile.add-tile {
     display: grid; place-items: center; text-align: center; color: var(--muted);
     background: transparent; outline: 1.5px dashed var(--line); outline-offset: -6px; font-size: 12px; font-weight: 600;
@@ -233,6 +239,8 @@
   .slide-empty { flex: 0 0 100%; height: 34dvh; display: grid; place-items: center; text-align: center; color: #fff; padding: 20px; }
   .slide-empty .btn { color: #fff; background: rgba(255,255,255,.16); height: 36px; padding: 0 16px; }
   .slide-empty p { margin: 0 0 12px; opacity: .8; }
+  .slide .slide-empty { height: 100%; font-size: 13px; }
+  .slide .slide-empty p { opacity: .9; }
   .slide-count {
     position: absolute; top: 10px; left: 10px; padding: 2px 8px; border-radius: 10px;
     background: rgba(0,0,0,.55); color: #fff; font-size: 12px; font-weight: 600; pointer-events: none;
@@ -354,6 +362,7 @@
   <main>
     <section id="gridView">
       <div class="grid" id="grid"></div>
+      <button class="hint off-grid-note" id="offGridNote" data-goto="reels" hidden></button>
       <div class="empty" id="empty" hidden>
         <div class="empty-icon">
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
@@ -472,6 +481,10 @@
         <button data-kind="trial">Trial reel</button>
       </div>
       <div class="hint" id="kindHint"></div>
+      <div class="switch-row" id="gridRow">
+        <span>Show on profile grid<small class="hint" id="gridHint" style="display:block"></small></span>
+        <label class="switch"><input type="checkbox" id="sheetOnGrid"><span></span></label>
+      </div>
 
       <div class="cover" id="coverBox">
         <div class="cover-preview" id="coverPreview"></div>
@@ -572,9 +585,9 @@
     post: '',
     carousel: 'Swipe through the slides above. The grid shows the thumbnail below.',
     reel: 'The grid crops reels to 3:4; the Reels tab shows the full 9:16.',
-    trial: 'Trial reels go to non-followers first and only land on your grid if you share them there.',
+    trial: 'On Instagram, trial reels go to non-followers first and only land on your grid if you share them there. Use the switch below to preview either way.',
   };
-  const posts = new Map();     // id -> { id, kind, title, slides: [Blob], thumb, customThumb, caption, posted, created }
+  const posts = new Map();     // id -> { id, kind, title, slides: [Blob], thumb, customThumb, caption, posted, onGrid, created }
   let order = [];              // grid order, index 0 = top-left (newest)
   let profile = { username: 'yourbrand', name: '', verified: false, category: '', bio: '', link: '', followers: '', following: '' };
   let schedule = { start: todayISO(), time: '18:00', every: 1 };
@@ -613,6 +626,7 @@
     p.caption = p.caption || '';
     p.posted = !!p.posted;
     p.customThumb = !!p.customThumb;
+    if (typeof p.onGrid !== 'boolean') { p.onGrid = true; changed = true; }
     return changed;
   }
 
@@ -679,38 +693,71 @@
 
   // ---------- Creating posts ----------
   function newPost(fields) {
-    return { id: uid(), kind: 'post', title: '', slides: [], thumb: null, customThumb: false, caption: '', posted: false, created: Date.now(), ...fields };
+    return { id: uid(), kind: 'post', title: '', slides: [], thumb: null, customThumb: false, caption: '', posted: false, onGrid: true, created: Date.now(), ...fields };
   }
   function insertAtTop(ids) {
     order = ids.concat(order);
     saveOrder();
   }
+  const isReel = p => p.kind === 'reel' || p.kind === 'trial';
+  // Reels can be kept off the profile grid (Reels tab only), like Instagram's "Show on profile grid".
+  const onGrid = p => !isReel(p) || p.onGrid !== false;
   const kindFor = files => (files.length > 1 ? 'carousel' : isVideo(files[0]) ? 'reel' : 'post');
-  const mediaOnly = list => [...list].filter(f => /^(image|video)\//.test(f.type));
+  // Some browsers/OSes hand over .mov and friends with no MIME type, so fall back to the extension.
+  const EXT_TYPES = {
+    mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', qt: 'video/quicktime', webm: 'video/webm',
+    mkv: 'video/x-matroska', avi: 'video/x-msvideo', mts: 'video/mp2t', m2ts: 'video/mp2t', '3gp': 'video/3gpp',
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+    heic: 'image/heic', heif: 'image/heif', avif: 'image/avif', tif: 'image/tiff', tiff: 'image/tiff',
+  };
+  const extOf = f => ((f && f.name) || '').split('.').pop().toLowerCase();
+  function asMedia(f) {
+    if (/^(image|video)\//.test(f.type)) return f;
+    const type = EXT_TYPES[extOf(f)];
+    return type ? new File([f], f.name, { type, lastModified: f.lastModified }) : null;
+  }
+  const mediaOnly = list => [...list].map(asMedia).filter(Boolean);
+  const cantPreview = p => !p.thumb && isVideo(p.slides[0]);
+  function warnUnplayable(names) {
+    if (!names.length) return;
+    toast(`Added, but this browser can't play ${names.length === 1 ? `“${names[0]}”` : `${names.length} of these videos`}. ` +
+      'ProRes and some iPhone (HEVC) videos only play in Safari. Open the planner in Safari, or export an H.264 MP4. ' +
+      'You can still set a cover with “Upload image”.', 12000);
+  }
 
   async function addFiles(fileList, mode = 'each') {
     const files = mediaOnly(fileList);
     if (!files.length) { toast('Only videos and photos can be added.'); return; }
     toast(`Adding ${files.length} ${files.length === 1 ? 'file' : 'files'}…`, 60000);
     const groups = mode === 'carousel' ? [files] : files.map(f => [f]);
-    const ids = [];
+    const ids = [], unplayable = [];
     for (const g of groups) {
       const p = newPost({ kind: kindFor(g), slides: g });
       await autoThumb(p);
+      if (cantPreview(p)) unplayable.push(g[0].name);
       posts.set(p.id, p);
       ids.push(p.id);
       persist(store.putPost(p));
     }
     insertAtTop(ids); // first file picked lands top-left, same as reading the grid
     render();
-    toast(mode === 'carousel' ? `Carousel with ${files.length} slides added.` : `Added ${ids.length}. Drag cells to rearrange.`);
+    if (unplayable.length) warnUnplayable(unplayable);
+    else if (mode === 'carousel') toast(`Carousel with ${files.length} slides added.`);
+    else if (ids.some(id => isReel(posts.get(id)))) toast(`Added ${ids.length}. Reels show on your grid; tap one to make it Reels-tab only.`, 4500);
+    else toast(`Added ${ids.length}. Drag cells to rearrange.`);
   }
 
   // Fill one cell with media (from the picker or a file dropped on it).
   async function addMediaTo(id, fileList) {
     const p = posts.get(id);
     const files = mediaOnly(fileList);
-    if (!p || !files.length) return;
+    if (!p) return;
+    if (!files.length) {
+      const names = [...fileList].map(f => f.name).filter(Boolean).join(', ');
+      toast(`${names ? `“${names}” isn't` : "That isn't"} a video or photo this planner recognizes.`, 6000);
+      return;
+    }
+    toast('Adding…', 60000);
     const wasEmpty = p.slides.length === 0;
     p.slides.push(...files);
     if (p.slides.length > 1) p.kind = 'carousel';
@@ -719,7 +766,9 @@
     savePost(p);
     render();
     if (openId === id) renderSheet();
-    toast(wasEmpty ? 'Cell filled.' : `Added ${files.length} more ${files.length === 1 ? 'slide' : 'slides'}.`);
+    if (wasEmpty && cantPreview(p)) warnUnplayable([files[0].name]);
+    else if (wasEmpty && isReel(p)) toast('Reel added to your grid. Use “Show on profile grid” to make it Reels-tab only.', 4500);
+    else toast(wasEmpty ? 'Cell filled.' : `Added ${files.length} more ${files.length === 1 ? 'slide' : 'slides'}.`);
   }
 
   function parseList(text) {
@@ -757,7 +806,12 @@
   const listEl = $('schedList');
   const icon = (name, size = 18) => `<svg width="${size}" height="${size}"><use href="#i-${name}"/></svg>`;
   const kindIcon = (p, size) => (p.kind === 'carousel' ? icon('carousel', size) : p.kind === 'reel' || p.kind === 'trial' ? icon('reel', size) : '');
-  const placeholder = p => `<div class="ph" style="--h:${hue(p.id)}"><span>${esc(p.title || KINDS[p.kind])}</span><small>+ add video</small></div>`;
+  const placeholder = p => {
+    const first = p.slides[0];
+    const label = p.title || (first && first.name) || KINDS[p.kind];
+    const sub = first ? `${icon('reel', 11)} .${esc(extOf(first))} · no preview` : '+ add video';
+    return `<div class="ph" style="--h:${hue(p.id)}"><span>${esc(label)}</span><small>${sub}</small></div>`;
+  };
 
   function tileHTML(p, when) {
     return (p.thumb ? `<img alt="" draggable="false" src="${urlFor(p.thumb)}">` : placeholder(p)) +
@@ -770,10 +824,14 @@
     const dates = scheduleDates();
     $('postCount').textContent = posts.size;
     $('empty').hidden = posts.size > 0;
+    const offGrid = order.filter(id => !onGrid(posts.get(id))).length;
+    $('offGridNote').hidden = !offGrid;
+    $('offGridNote').textContent = `${offGrid} ${offGrid === 1 ? 'reel is' : 'reels are'} hidden from the grid (Reels tab only).`;
 
     gridEl.innerHTML = '';
     for (const id of order) {
       const p = posts.get(id);
+      if (!onGrid(p)) continue;
       const tile = document.createElement('div');
       tile.className = 'tile';
       tile.dataset.id = id;
@@ -797,7 +855,7 @@
       const tile = document.createElement('div');
       tile.className = 'tile';
       tile.dataset.id = id;
-      tile.innerHTML = tileHTML(posts.get(id), dates.get(id));
+      tile.innerHTML = tileHTML(posts.get(id), dates.get(id)) + (onGrid(posts.get(id)) ? '' : '<span class="reels-only">Not on grid</span>');
       reelsGrid.appendChild(tile);
     }
 
@@ -816,7 +874,7 @@
         `<span class="num">${i + 1}</span>${thumb}` +
         `<span class="meta"><div class="date">${fmtLong.format(d)} · ${fmtTime.format(d)}</div>` +
         `<div class="cap">${esc(p.title || p.caption || 'Untitled')}</div>` +
-        `<div class="sub">${KINDS[p.kind]}${p.slides.length ? '' : ' · needs media'}</div></span>` +
+        `<div class="sub">${KINDS[p.kind]}${onGrid(p) ? '' : ' · Reels tab only'}${p.slides.length ? '' : ' · needs media'}</div></span>` +
         `<span class="grip" aria-label="Drag to reorder">${icon('grip', 20)}</span>`;
       listEl.appendChild(li);
     });
@@ -966,7 +1024,11 @@
   }
 
   makeSortable(gridEl, '.tile[data-id]', {
-    onEnd(ids) { order = ids; saveOrder(); render(); },
+    onEnd(ids) {
+      let k = 0;
+      order = order.map(id => (onGrid(posts.get(id)) ? ids[k++] : id));
+      saveOrder(); render();
+    },
   });
   makeSortable(listEl, '.item', {
     handleSelector: '.grip',
@@ -1038,6 +1100,19 @@
         if (i === 0 && p.thumb) v.poster = urlFor(p.thumb);
         v.addEventListener('timeupdate', syncScrub);
         v.addEventListener('loadedmetadata', syncScrub);
+        const unplayable = () => {
+          if (!v.isConnected) return;
+          v.remove();
+          const msg = document.createElement('div');
+          msg.className = 'slide-empty';
+          msg.innerHTML = `<div><p><b>${esc(blob.name || 'This video')}</b></p><p>This browser can't play this video format. ` +
+            `ProRes and some iPhone (HEVC) videos only play in Safari. Open the planner in Safari, or export an H.264 MP4.</p>` +
+            `<p>You can still set its grid cover with “Upload image” below.</p></div>`;
+          s.prepend(msg);
+          onSlideChange();
+        };
+        v.addEventListener('error', unplayable);
+        v.addEventListener('loadedmetadata', () => { if (!v.videoWidth) unplayable(); });
         s.appendChild(v);
       } else {
         const img = document.createElement('img');
@@ -1068,6 +1143,9 @@
     document.querySelectorAll('#sheetKind button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === p.kind)));
     $('kindHint').textContent = KIND_HINTS[p.kind];
     $('kindHint').hidden = !KIND_HINTS[p.kind];
+    $('gridRow').hidden = !isReel(p);
+    $('sheetOnGrid').checked = onGrid(p);
+    $('gridHint').textContent = onGrid(p) ? 'Appears in your feed grid and the Reels tab.' : 'Reels tab only. Turn on to see it in the feed.';
   }
 
   function fillSheetWhen() {
@@ -1180,6 +1258,11 @@
     const p = posts.get(openId);
     if (!b || !p) return;
     p.kind = b.dataset.kind; savePost(p); renderKind(); render();
+  });
+  $('sheetOnGrid').addEventListener('change', e => {
+    const p = posts.get(openId); if (!p) return;
+    p.onGrid = e.target.checked; savePost(p); renderKind(); render();
+    toast(p.onGrid ? 'Now showing on your grid.' : 'Hidden from the grid. Still in the Reels tab and schedule.');
   });
   $('sheetCaption').addEventListener('input', e => {
     const p = posts.get(openId); if (!p) return;
@@ -1308,7 +1391,7 @@
 
   // Drag files from your computer: onto a cell fills that cell, anywhere else adds new cells.
   let dragDepth = 0, dropTile = null;
-  const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].some(t => t === 'Files' || t === 'text/uri-list');
   function markDropTile(el) {
     if (dropTile === el) return;
     if (dropTile) dropTile.classList.remove('drop-target');
@@ -1327,6 +1410,10 @@
     e.preventDefault(); dragDepth = 0; $('dropOverlay').hidden = true;
     const tile = e.target.closest && e.target.closest('.tile[data-id]');
     markDropTile(null);
+    if (!e.dataTransfer.files.length) {
+      toast("That came through as a link, not a file. Download the video to your computer first, then drag it in, or tap a cell and choose it.", 8000);
+      return;
+    }
     if (openId && !$('sheet').hidden) addMediaTo(openId, e.dataTransfer.files);
     else if (tile) addMediaTo(tile.dataset.id, e.dataTransfer.files);
     else addFiles(e.dataTransfer.files);

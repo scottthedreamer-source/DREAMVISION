@@ -151,6 +151,8 @@
   }
   .ph span { font-weight: 800; font-size: 12px; line-height: 1.15; text-transform: uppercase; overflow-wrap: anywhere; }
   .ph small { font-size: 10px; opacity: .75; display: flex; align-items: center; gap: 4px; }
+  .recover { margin: 0 16px 12px; padding: 12px; border-radius: 12px; background: var(--chip); display: grid; gap: 10px; }
+  .recover p { margin: 0; }
   .off-grid-note { display: block; width: 100%; padding: 12px 16px; text-align: center; }
   .off-grid-note:hover { color: var(--fg); }
   .tile .reels-only {
@@ -376,6 +378,13 @@
 
   <main>
     <section id="gridView">
+      <div class="recover" id="recover" hidden>
+        <p><b>The planner closed unexpectedly last time.</b> Very large videos can do this, especially on phones. Smaller H.264 exports work best.</p>
+        <div class="sheet-btns">
+          <button class="btn" id="recoverOk">OK</button>
+          <button class="btn danger" id="recoverClear">Clear all planner data</button>
+        </div>
+      </div>
       <div class="grid" id="grid"></div>
       <button class="hint off-grid-note" id="offGridNote" data-goto="reels" hidden></button>
       <div class="empty" id="empty" hidden>
@@ -558,13 +567,43 @@
     function open() {
       if (!dbPromise) {
         dbPromise = new Promise((resolve, reject) => {
-          const req = indexedDB.open('feed-planner', 1);
-          req.onupgradeneeded = () => {
-            req.result.createObjectStore('posts', { keyPath: 'id' });
-            req.result.createObjectStore('kv');
+          const req = indexedDB.open('feed-planner', 2);
+          req.onupgradeneeded = e => {
+            const db = req.result;
+            if (e.oldVersion < 1) {
+              db.createObjectStore('posts', { keyPath: 'id' });
+              db.createObjectStore('kv');
+            }
+            if (e.oldVersion < 2) {
+              // Videos live in their own store so editing a title never rewrites (or reloads) a video.
+              const media = db.createObjectStore('media');
+              if (e.oldVersion >= 1) {
+                req.transaction.objectStore('posts').openCursor().onsuccess = ev => {
+                  const cur = ev.target.result;
+                  if (!cur) return;
+                  const p = cur.value;
+                  const blobs = Array.isArray(p.slides) ? p.slides : p.media ? [p.media] : [];
+                  p.slides = blobs.map(b => {
+                    if (!(b instanceof Blob)) return b;
+                    const id = uid();
+                    media.put(b, id);
+                    return { id, type: b.type, name: b.name || '' };
+                  });
+                  if (!p.kind) p.kind = p.type === 'video' ? 'reel' : p.slides.length > 1 ? 'carousel' : 'post';
+                  delete p.media; delete p.type;
+                  cur.update(p);
+                  cur.continue();
+                };
+              }
+            }
           };
-          req.onsuccess = () => resolve(req.result);
+          req.onsuccess = () => {
+            // Let a newer version (e.g. the planner updated in another tab) take over instead of blocking it.
+            req.result.onversionchange = () => req.result.close();
+            resolve(req.result);
+          };
           req.onerror = () => reject(req.error);
+          req.onblocked = () => toast('Close the planner in your other tabs to finish updating it.', 8000);
         });
       }
       return dbPromise;
@@ -582,6 +621,9 @@
       allPosts: () => run('posts', 'readonly', s => s.getAll()),
       putPost: p => run('posts', 'readwrite', s => s.put(p)),
       deletePost: id => run('posts', 'readwrite', s => s.delete(id)),
+      getMedia: id => run('media', 'readonly', s => s.get(id)),
+      putMedia: (id, blob) => run('media', 'readwrite', s => s.put(blob, id)),
+      deleteMedia: id => run('media', 'readwrite', s => s.delete(id)),
       get: k => run('kv', 'readonly', s => s.get(k)),
       set: (k, v) => run('kv', 'readwrite', s => s.put(v, k)),
     };
@@ -602,7 +644,8 @@
     reel: 'The grid crops reels to 3:4; the Reels tab shows the full 9:16.',
     trial: 'On Instagram, trial reels go to non-followers first and only land on your grid if you share them there. Use the switch below to preview either way.',
   };
-  const posts = new Map();     // id -> { id, kind, title, slides: [Blob], thumb, customThumb, caption, posted, onGrid, created }
+  const posts = new Map();     // id -> { id, kind, title, slides: [{ id, type, name }], thumb, customThumb, caption, posted, onGrid, created }
+  const mediaCache = new Map(); // media id -> Blob, loaded only when a cell is opened
   let order = [];              // grid order, index 0 = top-left (newest)
   let profile = { username: 'yourbrand', name: '', verified: false, category: '', bio: '', link: '', followers: '', following: '' };
   let schedule = { start: todayISO(), time: '18:00', every: 1 };
@@ -630,13 +673,11 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function hue(id) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
 
-  // Older saves stored one `media` blob per post; move them onto `slides`.
+  // Fill in fields that older saves don't have. (Files were moved out of posts by the v2 upgrade.)
   function normalize(p) {
     let changed = false;
-    if (!Array.isArray(p.slides)) { p.slides = p.media ? [p.media] : []; changed = true; }
-    if ('media' in p) { delete p.media; changed = true; }
-    if (!p.kind) { p.kind = p.type === 'video' ? 'reel' : p.slides.length > 1 ? 'carousel' : 'post'; changed = true; }
-    if ('type' in p) { delete p.type; changed = true; }
+    if (!Array.isArray(p.slides)) { p.slides = []; changed = true; }
+    if (!p.kind) { p.kind = p.slides.length > 1 ? 'carousel' : isVideo(p.slides[0]) ? 'reel' : 'post'; changed = true; }
     p.title = p.title || '';
     p.caption = p.caption || '';
     p.posted = !!p.posted;
@@ -700,10 +741,32 @@
   }
   const mediaThumb = blob => (isVideo(blob) ? videoThumb(blob) : imageThumb(blob));
 
+  // Each slide is { id, type, name }; the file itself is saved once and loaded on demand.
+  function storeMedia(file) {
+    const id = uid();
+    mediaCache.set(id, file);
+    persist(store.putMedia(id, file));
+    return { id, type: file.type, name: file.name || '' };
+  }
+  async function loadMedia(slide) {
+    if (!mediaCache.has(slide.id)) {
+      const blob = await store.getMedia(slide.id).catch(() => null);
+      if (blob) mediaCache.set(slide.id, blob);
+    }
+    return mediaCache.get(slide.id) || null;
+  }
+  function forgetMedia(slide) {
+    const blob = mediaCache.get(slide.id);
+    if (blob) dropUrl(blob);
+    mediaCache.delete(slide.id);
+    persist(store.deleteMedia(slide.id));
+  }
+
   async function autoThumb(p) {
     if (p.customThumb && p.thumb) return;
     p.customThumb = false;
-    p.thumb = p.slides[0] ? await mediaThumb(p.slides[0]) : null;
+    const first = p.slides[0] ? await loadMedia(p.slides[0]) : null;
+    p.thumb = first ? await mediaThumb(first) : null;
   }
 
   // ---------- Creating posts ----------
@@ -747,7 +810,7 @@
     const groups = mode === 'carousel' ? [files] : files.map(f => [f]);
     const ids = [], unplayable = [];
     for (const g of groups) {
-      const p = newPost({ kind: kindFor(g), slides: g });
+      const p = newPost({ kind: kindFor(g), slides: g.map(storeMedia) });
       await autoThumb(p);
       if (cantPreview(p)) unplayable.push(g[0].name);
       posts.set(p.id, p);
@@ -774,7 +837,7 @@
     }
     toast('Adding…', 60000);
     const wasEmpty = p.slides.length === 0;
-    p.slides.push(...files);
+    p.slides.push(...files.map(storeMedia));
     if (p.slides.length > 1) p.kind = 'carousel';
     else if (wasEmpty && isVideo(files[0]) && p.kind === 'post') p.kind = 'reel';
     if (wasEmpty) await autoThumb(p);
@@ -1106,33 +1169,39 @@
       slidesEl.innerHTML = `<div class="slide-empty" style="background:hsl(${hue(p.id)} 22% 30%)"><div>` +
         `<p>${esc(p.title || 'Empty cell')}</p><button class="btn" data-add-media>Add video or photo</button></div></div>`;
     }
-    p.slides.forEach((blob, i) => {
+    const showProblem = (s, html) => {
+      s.querySelectorAll('video, img').forEach(el => el.remove());
+      const msg = document.createElement('div');
+      msg.className = 'slide-empty';
+      msg.innerHTML = `<div>${html}</div>`;
+      s.prepend(msg);
+      onSlideChange();
+    };
+    const missing = slide => `<p><b>${esc(slide.name || 'This file')}</b></p><p>This file isn't saved in this browser anymore. Remove this slide and add the file again.</p>`;
+    p.slides.forEach((slide, i) => {
       const s = document.createElement('div');
       s.className = 'slide';
-      if (isVideo(blob)) {
+      if (isVideo(slide)) {
         const v = document.createElement('video');
-        v.src = urlFor(blob); v.controls = true; v.playsInline = true; v.preload = 'metadata';
+        v.controls = true; v.playsInline = true; v.preload = 'metadata';
+        loadMedia(slide).then(b => { if (!v.isConnected) return; if (b) v.src = urlFor(b); else showProblem(s, missing(slide)); });
         if (i === 0 && p.thumb) v.poster = urlFor(p.thumb);
         v.addEventListener('timeupdate', syncScrub);
         v.addEventListener('loadedmetadata', syncScrub);
         const unplayable = () => {
           if (!v.isConnected) return;
-          v.remove();
-          const msg = document.createElement('div');
-          msg.className = 'slide-empty';
-          msg.innerHTML = `<div><p><b>${esc(blob.name || 'This video')}</b></p><p>This browser can't play this video format. ` +
+          showProblem(s, `<p><b>${esc(slide.name || 'This video')}</b></p><p>This browser can't play this video format. ` +
             `ProRes and some iPhone (HEVC) videos only play in Safari. Open the planner in Safari, or export an H.264 MP4.</p>` +
-            `<p>You can still set its grid cover with “Upload image” below.</p></div>`;
-          s.prepend(msg);
-          onSlideChange();
+            `<p>You can still set its grid cover with “Upload image” below.</p>`);
         };
-        v.addEventListener('error', unplayable);
+        v.addEventListener('error', () => { if (v.getAttribute('src')) unplayable(); });
         v.addEventListener('loadedmetadata', () => { if (!v.videoWidth) unplayable(); });
         s.appendChild(v);
       } else {
         const img = document.createElement('img');
-        img.src = urlFor(blob); img.alt = '';
+        img.alt = '';
         img.onerror = () => { img.onerror = null; if (p.thumb) img.src = urlFor(p.thumb); };
+        loadMedia(slide).then(b => { if (!img.isConnected) return; if (b) img.src = urlFor(b); else showProblem(s, missing(slide)); });
         s.appendChild(img);
       }
       const rm = document.createElement('button');
@@ -1230,7 +1299,7 @@
   });
 
   async function setThumb(p, blob, custom) {
-    if (p.thumb && !p.slides.includes(p.thumb)) dropUrl(p.thumb);
+    if (p.thumb && p.thumb !== blob) dropUrl(p.thumb);
     p.thumb = blob;
     p.customThumb = custom;
     savePost(p);
@@ -1300,7 +1369,7 @@
   });
   async function removeSlide(p, index) {
     const [gone] = p.slides.splice(index, 1);
-    dropUrl(gone);
+    forgetMedia(gone);
     if (!p.customThumb || !p.slides.length) { p.customThumb = false; await autoThumb(p); }
     if (p.kind === 'carousel' && p.slides.length === 1) p.kind = isVideo(p.slides[0]) ? 'reel' : 'post';
     savePost(p); render(); renderSheet();
@@ -1318,7 +1387,7 @@
   });
   function deleteCell(p) {
     closeSheet();
-    dropUrl(p.thumb); p.slides.forEach(dropUrl);
+    dropUrl(p.thumb); p.slides.forEach(forgetMedia);
     posts.delete(p.id);
     order = order.filter(id => id !== p.id);
     persist(store.deletePost(p.id));
@@ -1466,6 +1535,16 @@
   }
 
   // ---------- Boot ----------
+  // A flag that's still set at the next launch means the last one never finished (e.g. the tab crashed).
+  let lastLaunchFailed = false;
+  try { lastLaunchFailed = localStorage.getItem('feed-planner-booting') === '1'; localStorage.setItem('feed-planner-booting', '1'); } catch {}
+  $('recover').hidden = !lastLaunchFailed;
+  $('recoverOk').addEventListener('click', () => { $('recover').hidden = true; });
+  $('recoverClear').addEventListener('click', e => confirmTap(e.currentTarget, 'Tap again to erase everything', () => {
+    try { localStorage.removeItem('feed-planner-booting'); } catch {}
+    const del = indexedDB.deleteDatabase('feed-planner');
+    del.onsuccess = del.onerror = del.onblocked = () => location.reload();
+  }));
   (async () => {
     try {
       const [saved, savedOrder, savedProfile, savedSchedule, savedAvatar] = await Promise.all([
@@ -1490,6 +1569,7 @@
     renderScheduleInputs();
     setTab(['grid', 'reels', 'schedule'].includes(tab) ? tab : 'grid');
     render();
+    setTimeout(() => { try { localStorage.removeItem('feed-planner-booting'); } catch {} }, 4000);
   })();
 })();
 </script>

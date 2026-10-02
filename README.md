@@ -2,10 +2,13 @@
 
 A phone-style profile grid for planning posts. Open `index.html` in a browser (phone or desktop); nothing to install.
 
-- **Add posts**: tap **+** / **Add posts**, or drag photos and videos onto the page.
-- **Rearrange**: drag tiles around the grid. On a phone, press and hold a tile, then drag.
-- **Schedule**: set a start date, time and "post every N days". The bottom of the grid posts first, and dates follow the grid order, so dragging a tile reschedules it. The Schedule tab shows the queue as a list you can also drag (use the ☰ handle on a phone).
-- **Tap a post** to add a caption/notes, mark it as already posted (shows as *Live* and leaves the queue), or change its thumbnail: pick a frame from a video, upload a custom cover, or reset it.
-- **Profile**: tap the username, name, bio, follower counts or profile photo to edit them.
+- **Start from your post list**: tap **Paste list** and paste a numbered list (one post per line). Line 1 becomes the top-left cell. Words like *carousel*, *trial* or *post* set the type; anything else becomes a reel.
+- **Fill a cell**: tap it and add a video or photo, or drag a file from your computer straight onto the cell. Add more files to make it a carousel.
+- **Add new cells**: **Add** → videos & photos (one cell each), a carousel, or an empty titled cell.
+- **Rearrange**: drag cells around the grid. On a phone, press and hold a cell, then drag.
+- **Play and pick the thumbnail**: tap a cell to play the video or swipe the carousel. Under **Grid thumbnail**, play or scrub to any frame and tap **Use this frame**, or upload your own image. The preview shows exactly how it will look on the grid.
+- **Reels tab** shows reels at full 9:16, the way Instagram's Reels tab crops them.
+- **Schedule**: set a start date, time and "post every N days". The bottom of the grid posts first, and dates follow the grid order, so dragging a cell reschedules it. Mark posts as **Already posted** to take them out of the queue.
+- **Profile**: tap the name, verified badge, category, bio, link, follower counts or profile photo to edit them.
 
 Everything is saved in the browser you use (IndexedDB), so it survives refreshes but stays on that device and browser.

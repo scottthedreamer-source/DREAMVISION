@@ -16,10 +16,10 @@
     --chip-hover: #dbdbdb;
     --sheet: #ffffff;
     --accent: #0095f6;
+    --link: #00376b;
     --danger: #ed4956;
     --badge: rgba(0, 0, 0, 0.62);
     --backdrop: rgba(0, 0, 0, 0.45);
-    --ring: linear-gradient(45deg, #f9ce34, #ee2a7b 50%, #6228d7);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -30,6 +30,7 @@
       --chip: #262626;
       --chip-hover: #363636;
       --sheet: #1a1a1a;
+      --link: #e0f1ff;
       --backdrop: rgba(0, 0, 0, 0.65);
     }
   }
@@ -72,31 +73,34 @@
   .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; }
   .icon-btn:active { opacity: 0.5; }
 
-  /* Profile header */
+  /* Profile header (current Instagram layout: name + stats beside the photo) */
   .profile { padding: 4px 16px 0; }
-  .profile-top { display: flex; align-items: center; gap: 24px; }
-  .avatar-ring {
-    flex: none; width: 90px; height: 90px; border-radius: 50%;
-    padding: 3px; background: var(--ring); cursor: pointer;
-  }
+  .profile-top { display: flex; align-items: center; gap: 20px; }
   .avatar {
-    width: 100%; height: 100%; border-radius: 50%;
-    border: 3px solid var(--bg); background: var(--chip) center/cover no-repeat;
+    flex: none; width: 86px; height: 86px; border-radius: 50%; cursor: pointer;
+    background: var(--chip) center/cover no-repeat; border: 1px solid var(--line);
     display: grid; place-items: center; color: var(--muted);
   }
-  .stats { flex: 1; display: flex; justify-content: space-around; text-align: center; }
-  .stat b { display: block; font-size: 17px; font-weight: 700; }
+  .profile-main { flex: 1; min-width: 0; display: grid; gap: 8px; }
+  .name-row { min-width: 0; }
+  .name-row .name { font-weight: 600; font-size: 15px; outline: none; overflow-wrap: anywhere; }
+  .verified { display: inline-flex; vertical-align: -2px; margin-left: 4px; color: var(--accent); }
+  .verified[aria-pressed="false"] { opacity: 0.18; }
+  .stats { display: flex; gap: 22px; }
+  .stat b { display: block; font-size: 16px; font-weight: 600; }
   .stat span { font-size: 13px; }
   .stat [contenteditable] { outline: none; }
-  .bio { margin-top: 10px; }
-  .bio .name { font-weight: 600; outline: none; }
+  .bio { margin-top: 12px; display: grid; gap: 1px; }
+  .bio .category { color: var(--muted); outline: none; }
   .bio .text { white-space: pre-wrap; outline: none; min-height: 1.35em; }
-  [contenteditable]:empty::before { content: attr(data-placeholder); color: var(--muted); }
+  .bio .link { display: flex; align-items: center; gap: 6px; color: var(--link); font-weight: 600; }
+  .bio .link span { outline: none; min-width: 2em; }
+  [contenteditable]:empty::before { content: attr(data-placeholder); color: var(--muted); font-weight: 400; }
   [contenteditable]:focus { background: var(--chip); border-radius: 4px; }
   .actions { display: flex; gap: 6px; margin: 14px 0 10px; }
   .btn {
-    flex: 1; height: 32px; border-radius: 8px; background: var(--chip);
-    font-weight: 600; font-size: 14px;
+    flex: 1; min-height: 32px; border-radius: 8px; background: var(--chip);
+    font-weight: 600; font-size: 14px; padding: 0 10px;
   }
   .btn:hover { background: var(--chip-hover); }
   .btn.primary { background: var(--accent); color: #fff; }
@@ -110,19 +114,30 @@
   }
   .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
 
-  /* Grid */
+  /* Grid: Instagram's profile grid is 3:4 */
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
   .tile {
-    position: relative; aspect-ratio: 4 / 5; background: var(--chip); overflow: hidden;
+    position: relative; aspect-ratio: 3 / 4; background: var(--chip); overflow: hidden;
     cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   }
+  .reels .tile { aspect-ratio: 9 / 16; }
   .tile img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
-  .tile .kind { position: absolute; top: 6px; right: 6px; color: #fff; filter: drop-shadow(0 0 2px rgba(0,0,0,.5)); }
-  .tile .when {
-    position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 4px;
+  .tile .kind { position: absolute; top: 6px; right: 6px; color: #fff; filter: drop-shadow(0 0 2px rgba(0,0,0,.6)); }
+  .tile .when, .tile .trial {
+    position: absolute; bottom: 4px; padding: 1px 6px; border-radius: 4px;
     background: var(--badge); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .1px;
   }
+  .tile .when { left: 4px; }
+  .tile .trial { right: 4px; background: rgba(120, 60, 220, .85); }
   .tile .when.posted { background: rgba(0, 149, 246, .85); }
+  .tile.drop-target { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .ph {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 10px; text-align: center; color: #fff;
+    background: hsl(var(--h, 220) 22% 30%);
+  }
+  .ph span { font-weight: 800; font-size: 12px; line-height: 1.15; text-transform: uppercase; overflow-wrap: anywhere; }
+  .ph small { font-size: 10px; opacity: .75; display: flex; align-items: center; gap: 4px; }
   .tile.add-tile {
     display: grid; place-items: center; text-align: center; color: var(--muted);
     background: transparent; outline: 1.5px dashed var(--line); outline-offset: -6px; font-size: 12px; font-weight: 600;
@@ -134,7 +149,6 @@
   .drag-ghost {
     position: fixed; z-index: 100; pointer-events: none; margin: 0;
     box-shadow: 0 10px 30px rgba(0,0,0,.35); transform: scale(1.06); border-radius: 4px; overflow: hidden;
-    transition: transform .12s ease;
   }
   body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 
@@ -143,7 +157,8 @@
   .empty-icon { width: 64px; height: 64px; margin: 0 auto 14px; border: 2px solid var(--fg); border-radius: 50%; display: grid; place-items: center; }
   .empty h2 { font-size: 22px; margin: 0 0 6px; font-weight: 800; }
   .empty p { margin: 0 0 18px; color: var(--muted); }
-  .empty .btn { flex: none; padding: 0 18px; }
+  .empty .btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .empty .btn { flex: none; padding: 0 18px; height: 34px; }
 
   /* Schedule */
   .sched-settings { padding: 12px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
@@ -154,7 +169,8 @@
     height: 34px; padding: 0 10px; min-width: 0;
   }
   .field.num { width: 56px; text-align: center; }
-  .sched-hint { color: var(--muted); font-size: 12px; }
+  .field.wide { width: 100%; font-weight: 600; }
+  .hint { color: var(--muted); font-size: 12px; }
   .list { list-style: none; margin: 0; padding: 0; }
   .list-group { padding: 14px 16px 6px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
   .item {
@@ -162,11 +178,13 @@
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
   }
   .item:hover { background: color-mix(in srgb, var(--chip) 50%, transparent); }
-  .item .thumb { width: 52px; aspect-ratio: 4 / 5; border-radius: 4px; background: var(--chip) center/cover no-repeat; flex: none; position: relative; }
-  .item .thumb svg { position: absolute; top: 3px; right: 3px; color: #fff; filter: drop-shadow(0 0 2px rgba(0,0,0,.5)); }
+  .item .thumb { width: 48px; aspect-ratio: 3 / 4; border-radius: 4px; background: var(--chip) center/cover no-repeat; flex: none; position: relative; overflow: hidden; }
+  .item .thumb .ph span { font-size: 7px; }
+  .item .thumb > svg { position: absolute; top: 3px; right: 3px; color: #fff; filter: drop-shadow(0 0 2px rgba(0,0,0,.6)); }
   .item .meta { flex: 1; min-width: 0; }
   .item .date { font-weight: 600; }
-  .item .cap { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .cap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .sub { color: var(--muted); font-size: 12px; }
   .item .num { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; width: 20px; text-align: right; flex: none; }
   .item .grip { color: var(--muted); padding: 8px 0 8px 8px; cursor: grab; touch-action: none; }
 
@@ -178,51 +196,92 @@
     display: flex; justify-content: space-around; align-items: center;
     background: var(--bg); border-top: 1px solid var(--line);
   }
-  .bottomnav .mini-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--chip) center/cover no-repeat; border: 2px solid var(--fg); }
+  .bottomnav .mini-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--chip) center/cover no-repeat; border: 1px solid var(--line); }
 
-  /* Post sheet */
+  /* Modals */
   .backdrop {
     position: fixed; inset: 0; z-index: 50; background: var(--backdrop);
     display: flex; align-items: flex-end; justify-content: center;
     animation: fade .15s ease;
   }
   .sheet {
-    width: 100%; max-width: 430px; max-height: 92dvh; overflow: auto;
+    width: 100%; max-width: 430px; max-height: 94dvh; overflow: auto; overscroll-behavior: contain;
     background: var(--sheet); border-radius: 14px 14px 0 0;
     padding-bottom: env(safe-area-inset-bottom);
     animation: up .2s ease;
   }
   .grabber { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto; }
-  .sheet-media { background: #000; display: grid; place-items: center; max-height: 46dvh; }
-  .sheet-media img, .sheet-media video { max-width: 100%; max-height: 46dvh; display: block; }
   .sheet-body { padding: 12px 16px 16px; display: grid; gap: 12px; }
+  .sheet-title { font-size: 16px; font-weight: 700; text-align: center; padding: 2px 16px 6px; }
+  .menu { display: grid; padding: 0 8px 8px; }
+  .menu button { display: flex; gap: 14px; align-items: center; text-align: left; padding: 12px 10px; border-radius: 10px; }
+  .menu button:hover { background: var(--chip); }
+  .menu b { display: block; font-weight: 600; }
+  .menu small { color: var(--muted); }
+  .menu .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; flex: none; }
+
+  /* Post viewer: swipeable slides */
+  .viewer { position: relative; background: #000; }
+  .slides { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .slides::-webkit-scrollbar { display: none; }
+  .slide { flex: 0 0 100%; scroll-snap-align: center; position: relative; display: flex; align-items: center; justify-content: center; height: min(52dvh, 560px); overflow: hidden; }
+  .slide img, .slide video { max-width: 100%; max-height: min(52dvh, 560px); display: block; object-fit: contain; }
+  .slide .rm {
+    position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center;
+  }
+  .slide-empty { flex: 0 0 100%; height: 34dvh; display: grid; place-items: center; text-align: center; color: #fff; padding: 20px; }
+  .slide-empty .btn { color: #fff; background: rgba(255,255,255,.16); height: 36px; padding: 0 16px; }
+  .slide-empty p { margin: 0 0 12px; opacity: .8; }
+  .slide-count {
+    position: absolute; top: 10px; left: 10px; padding: 2px 8px; border-radius: 10px;
+    background: rgba(0,0,0,.55); color: #fff; font-size: 12px; font-weight: 600; pointer-events: none;
+  }
+  .dots { display: flex; justify-content: center; gap: 4px; padding: 8px 0 0; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+  .dots i.on { background: var(--accent); }
   .sheet-when { font-weight: 600; }
   .sheet-when small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .seg { display: flex; background: var(--chip); border-radius: 9px; padding: 2px; }
+  .seg button { flex: 1; height: 30px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .seg button[aria-pressed="true"] { background: var(--sheet); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
   .sheet textarea {
     font: inherit; color: var(--fg); background: var(--chip); border: 0; border-radius: 8px;
-    padding: 10px; min-height: 76px; resize: vertical; width: 100%;
+    padding: 10px; min-height: 70px; resize: vertical; width: 100%;
   }
   .switch-row { display: flex; align-items: center; justify-content: space-between; }
   .switch { position: relative; width: 44px; height: 26px; flex: none; }
-  .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; }
+  .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; z-index: 1; }
   .switch span { position: absolute; inset: 0; border-radius: 13px; background: var(--line); transition: background .15s; pointer-events: none; }
   .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
   .switch input:checked + span { background: var(--accent); }
   .switch input:checked + span::after { transform: translateX(18px); }
   .sheet-btns { display: flex; gap: 6px; flex-wrap: wrap; }
-  .sheet-btns .btn { flex: 1 1 140px; padding: 0 10px; }
+  .sheet-btns .btn { flex: 1 1 120px; height: 34px; }
   .btn.danger { color: var(--danger); background: transparent; }
   .btn.danger:hover { background: var(--chip); }
+
+  /* Cover picker */
+  .cover { display: grid; grid-template-columns: 78px 1fr; gap: 12px; align-items: center; padding: 12px; border-radius: 12px; background: var(--chip); }
+  .cover-preview { width: 78px; aspect-ratio: 3 / 4; border-radius: 4px; overflow: hidden; background: #000; position: relative; }
+  .cover-preview img, .cover-preview canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cover-preview .ph span { font-size: 8px; }
+  .cover h3 { margin: 0 0 2px; font-size: 14px; }
+  .cover .hint { margin-bottom: 8px; }
+  .cover input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0 0 8px; }
+  .cover .sheet-btns .btn { flex: 1 1 90px; background: var(--sheet); font-size: 13px; }
+  .cover .sheet-btns .btn:hover { background: var(--chip-hover); }
+  .cover .btn.primary { background: var(--accent); }
 
   /* Drop overlay + toast */
   .drop-overlay {
     position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
     background: color-mix(in srgb, var(--accent) 18%, transparent);
     border: 3px dashed var(--accent); font-size: 18px; font-weight: 700; color: var(--accent);
-    pointer-events: none;
+    pointer-events: none; text-align: center; padding: 20px;
   }
   .toast {
-    position: fixed; left: 50%; bottom: calc(66px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    position: fixed; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%);
     z-index: 70; background: #262626; color: #fff; padding: 10px 14px; border-radius: 8px;
     font-size: 13px; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0,0,0,.3);
   }
@@ -241,37 +300,51 @@
       <span id="username" contenteditable="plaintext-only" spellcheck="false" data-placeholder="username"></span>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
     </div>
-    <button class="icon-btn" id="addTop" aria-label="Add posts">
+    <button class="icon-btn" data-open-add aria-label="Add">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
     </button>
   </header>
 
   <section class="profile">
     <div class="profile-top">
-      <div class="avatar-ring" id="avatarBtn" title="Change profile photo">
-        <div class="avatar" id="avatar">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
-        </div>
+      <div class="avatar" id="avatar" title="Change profile photo">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
       </div>
-      <div class="stats">
-        <div class="stat"><b id="postCount">0</b><span>posts</span></div>
-        <div class="stat"><b id="followers" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0"></b><span>followers</span></div>
-        <div class="stat"><b id="following" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0"></b><span>following</span></div>
+      <div class="profile-main">
+        <div class="name-row">
+          <span class="name" id="displayName" contenteditable="plaintext-only" data-placeholder="Display name"></span>
+          <button class="verified" id="verifiedBtn" aria-pressed="false" aria-label="Verified badge" title="Tap to toggle the verified badge">
+            <svg width="16" height="16"><use href="#i-verified"/></svg>
+          </button>
+        </div>
+        <div class="stats">
+          <div class="stat"><b id="postCount">0</b><span>posts</span></div>
+          <div class="stat"><b id="followers" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0"></b><span>followers</span></div>
+          <div class="stat"><b id="following" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0"></b><span>following</span></div>
+        </div>
       </div>
     </div>
     <div class="bio">
-      <div class="name" id="displayName" contenteditable="plaintext-only" data-placeholder="Display name"></div>
+      <div class="category" id="category" contenteditable="plaintext-only" data-placeholder="Category"></div>
       <div class="text" id="bioText" contenteditable="plaintext-only" data-placeholder="Write a bio…"></div>
+      <div class="link">
+        <svg width="14" height="14"><use href="#i-link"/></svg>
+        <span id="link" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Add a link"></span>
+      </div>
     </div>
     <div class="actions">
-      <button class="btn primary" id="addBtn">Add posts</button>
-      <button class="btn" id="schedBtn">Schedule</button>
+      <button class="btn primary" data-open-add>Add</button>
+      <button class="btn" data-open-paste>Paste list</button>
+      <button class="btn" data-goto="schedule">Schedule</button>
     </div>
   </section>
 
   <nav class="tabs" role="tablist">
     <button class="tab" role="tab" data-tab="grid" aria-selected="true" aria-label="Grid">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+    </button>
+    <button class="tab" role="tab" data-tab="reels" aria-selected="false" aria-label="Reels">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M10 9v6l5-3z"/></svg>
     </button>
     <button class="tab" role="tab" data-tab="schedule" aria-selected="false" aria-label="Schedule">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
@@ -286,9 +359,17 @@
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
         </div>
         <h2>Plan your feed</h2>
-        <p>Add photos and videos, then drag them around until the grid looks right. The order sets your posting schedule.</p>
-        <button class="btn primary" id="addEmpty">Add photos &amp; videos</button>
+        <p>Add videos and photos, or paste your numbered post list to get a cell for each one. Then drag cells around until the grid looks right.</p>
+        <div class="btns">
+          <button class="btn primary" data-pick="each">Add videos &amp; photos</button>
+          <button class="btn" data-open-paste>Paste a list</button>
+        </div>
       </div>
+    </section>
+
+    <section id="reelsView" hidden>
+      <div class="grid reels" id="reelsGrid"></div>
+      <div class="empty" id="reelsEmpty" hidden><p>Reels and trial reels show here at full 9:16, the way the Reels tab crops them.</p></div>
     </section>
 
     <section id="scheduleView" hidden>
@@ -304,7 +385,7 @@
           <input class="field num" type="number" id="everyDays" min="1" max="60" step="1">
           <label for="everyDays">day(s)</label>
         </div>
-        <div class="sched-hint">The bottom of your grid posts first. Drag here or in the grid to reshuffle; dates follow the order.</div>
+        <div class="hint">The bottom of your grid posts first. Drag here or in the grid to reshuffle; dates follow the order.</div>
       </div>
       <ul class="list" id="schedList"></ul>
       <div class="empty" id="schedEmpty" hidden><p>Nothing scheduled yet. Add posts and they'll show up here in posting order.</p></div>
@@ -312,58 +393,131 @@
   </main>
 
   <nav class="bottomnav" aria-label="App">
-    <button class="icon-btn" aria-label="Home" data-scroll-top>
+    <button class="icon-btn" aria-label="Grid" data-goto="grid" data-scroll-top>
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V21h-6v-6H9v6H3z"/></svg>
     </button>
     <button class="icon-btn" aria-label="Schedule" data-goto="schedule">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
     </button>
-    <button class="icon-btn" aria-label="Add posts" id="addNav">
+    <button class="icon-btn" aria-label="Add" data-open-add>
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
     </button>
-    <button class="icon-btn" aria-label="Grid" data-goto="grid">
+    <button class="icon-btn" aria-label="Reels" data-goto="reels">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 8h18M8 3l3 5M14 3l3 5M10 12v6l5-3z"/></svg>
     </button>
-    <button class="icon-btn" aria-label="Profile" data-scroll-top>
+    <button class="icon-btn" aria-label="Profile" data-goto="grid" data-scroll-top>
       <span class="mini-avatar" id="miniAvatar"></span>
     </button>
   </nav>
 </div>
 
-<div class="backdrop" id="sheet" hidden>
-  <div class="sheet" role="dialog" aria-modal="true" aria-label="Post details">
+<!-- Add menu -->
+<div class="backdrop" id="addMenu" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Add">
     <div class="grabber"></div>
-    <div class="sheet-media" id="sheetMedia"></div>
+    <div class="sheet-title">Add to your grid</div>
+    <div class="menu">
+      <button data-pick="each">
+        <span class="ico"><svg width="20" height="20"><use href="#i-reel"/></svg></span>
+        <span><b>Videos &amp; photos</b><small>Each file gets its own cell</small></span>
+      </button>
+      <button data-pick="carousel">
+        <span class="ico"><svg width="20" height="20"><use href="#i-carousel"/></svg></span>
+        <span><b>Carousel</b><small>Pick several files for one swipeable post</small></span>
+      </button>
+      <button data-add-placeholder>
+        <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"><rect x="4" y="3" width="16" height="18" rx="2"/></svg></span>
+        <span><b>Empty cell</b><small>A titled spot for content you haven't shot yet</small></span>
+      </button>
+      <button data-open-paste>
+        <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></span>
+        <span><b>Paste a list</b><small>Turn your numbered post list into cells</small></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Paste list -->
+<div class="backdrop" id="pasteModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Paste a list">
+    <div class="grabber"></div>
+    <div class="sheet-title">Paste your post list</div>
     <div class="sheet-body">
-      <div class="sheet-when" id="sheetWhen"></div>
-      <textarea id="sheetCaption" placeholder="Write a caption or notes…"></textarea>
-      <div class="switch-row">
-        <span>Already posted</span>
-        <label class="switch"><input type="checkbox" id="sheetPosted"><span></span></label>
-      </div>
+      <div class="hint">One post per line. Line 1 becomes the top-left cell, like reading the grid. Words like carousel, trial or post set the type; anything else becomes a reel.</div>
+      <textarea id="pasteText" rows="9" placeholder="1. THE NEW WAY TO INTERVIEW - CAROUSEL&#10;2. FLASHY FOOTAGE - TRIAL REEL&#10;3. TALKING SCOTT A&#10;…"></textarea>
       <div class="sheet-btns">
-        <button class="btn" id="frameBtn">Set cover from this frame</button>
-        <button class="btn" id="thumbBtn">Upload thumbnail</button>
-        <button class="btn" id="resetThumbBtn">Reset thumbnail</button>
-      </div>
-      <div class="sheet-btns">
-        <button class="btn danger" id="deleteBtn">Delete post</button>
-        <button class="btn" id="closeBtn">Done</button>
+        <button class="btn" data-close>Cancel</button>
+        <button class="btn primary" id="pasteCreate">Create cells</button>
       </div>
     </div>
   </div>
 </div>
 
-<div class="drop-overlay" id="dropOverlay" hidden>Drop photos &amp; videos to add</div>
+<!-- Post viewer / editor -->
+<div class="backdrop" id="sheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Post details">
+    <div class="grabber"></div>
+    <div class="viewer">
+      <div class="slides" id="slides"></div>
+      <span class="slide-count" id="slideCount" hidden></span>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="sheet-body">
+      <div class="sheet-when" id="sheetWhen"></div>
+      <input class="field wide" id="sheetTitle" placeholder="Working title, e.g. TALKING SCOTT A" autocomplete="off">
+      <div class="seg" id="sheetKind" role="group" aria-label="Post type">
+        <button data-kind="post">Post</button>
+        <button data-kind="carousel">Carousel</button>
+        <button data-kind="reel">Reel</button>
+        <button data-kind="trial">Trial reel</button>
+      </div>
+      <div class="hint" id="kindHint"></div>
+
+      <div class="cover" id="coverBox">
+        <div class="cover-preview" id="coverPreview"></div>
+        <div>
+          <h3>Grid thumbnail</h3>
+          <div class="hint" id="coverHint"></div>
+          <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Scrub to pick a frame">
+          <div class="sheet-btns">
+            <button class="btn primary" id="frameBtn">Use this frame</button>
+            <button class="btn" id="thumbBtn">Upload image</button>
+            <button class="btn" id="resetThumbBtn">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <textarea id="sheetCaption" placeholder="Caption or notes…"></textarea>
+      <div class="switch-row">
+        <span>Already posted</span>
+        <label class="switch"><input type="checkbox" id="sheetPosted"><span></span></label>
+      </div>
+      <div class="sheet-btns">
+        <button class="btn" id="addMediaBtn">Add video or photo</button>
+      </div>
+      <div class="sheet-btns">
+        <button class="btn danger" id="deleteBtn">Delete cell</button>
+        <button class="btn" data-close>Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="drop-overlay" id="dropOverlay" hidden>Drop on a cell to fill it, or anywhere else to add new cells</div>
 <div class="toast" id="toast" hidden></div>
 
 <input type="file" id="fileInput" accept="image/*,video/*" multiple hidden>
+<input type="file" id="mediaInput" accept="image/*,video/*" multiple hidden>
 <input type="file" id="avatarInput" accept="image/*" hidden>
 <input type="file" id="thumbInput" accept="image/*" hidden>
 
 <svg width="0" height="0" style="position:absolute">
   <symbol id="i-reel" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm5 6v7l6-3.5z"/></symbol>
+  <symbol id="i-carousel" viewBox="0 0 24 24"><path fill="currentColor" d="M8 2h12a2 2 0 012 2v12a2 2 0 01-2 2h-1V6a1 1 0 00-1-1H6V4a2 2 0 012-2zM4 6h12a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z"/></symbol>
   <symbol id="i-grip" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 8h14M5 12h14M5 16h14"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></symbol>
+  <symbol id="i-verified" viewBox="0 0 24 24"><path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.2 1 3.1 2.7 1.8-1 3.1 1 3.1-2.7 1.8-1 3.1-3.2-.2L12 22.5l-2.6-1.9-3.2.2-1-3.1-2.7-1.8 1-3.1-1-3.1 2.7-1.8 1-3.1 3.2.2z"/><path fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M8 12.2l2.7 2.6L16.2 9"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></symbol>
 </svg>
 
 <script>
@@ -413,13 +567,21 @@
   }
 
   // ---------- State ----------
-  const posts = new Map();     // id -> { id, type, media, thumb, caption, posted, created }
+  const KINDS = { post: 'Post', carousel: 'Carousel', reel: 'Reel', trial: 'Trial reel' };
+  const KIND_HINTS = {
+    post: '',
+    carousel: 'Swipe through the slides above. The grid shows the thumbnail below.',
+    reel: 'The grid crops reels to 3:4; the Reels tab shows the full 9:16.',
+    trial: 'Trial reels go to non-followers first and only land on your grid if you share them there.',
+  };
+  const posts = new Map();     // id -> { id, kind, title, slides: [Blob], thumb, customThumb, caption, posted, created }
   let order = [];              // grid order, index 0 = top-left (newest)
-  let profile = { username: 'yourbrand', name: '', bio: '', followers: '', following: '' };
+  let profile = { username: 'yourbrand', name: '', verified: false, category: '', bio: '', link: '', followers: '', following: '' };
   let schedule = { start: todayISO(), time: '18:00', every: 1 };
   let avatarBlob = null;
   const urls = new Map();      // blob -> object URL cache
   let openId = null;
+  let currentTab = 'grid';
 
   function todayISO() {
     const d = new Date();
@@ -436,6 +598,23 @@
     if (u) { URL.revokeObjectURL(u); urls.delete(blob); }
   }
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const isVideo = blob => !!blob && /^video\//.test(blob.type);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function hue(id) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+
+  // Older saves stored one `media` blob per post; move them onto `slides`.
+  function normalize(p) {
+    let changed = false;
+    if (!Array.isArray(p.slides)) { p.slides = p.media ? [p.media] : []; changed = true; }
+    if ('media' in p) { delete p.media; changed = true; }
+    if (!p.kind) { p.kind = p.type === 'video' ? 'reel' : p.slides.length > 1 ? 'carousel' : 'post'; changed = true; }
+    if ('type' in p) { delete p.type; changed = true; }
+    p.title = p.title || '';
+    p.caption = p.caption || '';
+    p.posted = !!p.posted;
+    p.customThumb = !!p.customThumb;
+    return changed;
+  }
 
   // ---------- Schedule math ----------
   // Unposted posts go out bottom-of-grid first. Slot i = start + i * every days.
@@ -490,34 +669,102 @@
       v.src = src;
     });
   }
+  const mediaThumb = blob => (isVideo(blob) ? videoThumb(blob) : imageThumb(blob));
 
-  // ---------- Adding posts ----------
-  async function addFiles(fileList) {
-    const files = [...fileList].filter(f => /^(image|video)\//.test(f.type));
-    if (!files.length) { toast('Only photos and videos can be added.'); return; }
-    toast(`Adding ${files.length} ${files.length === 1 ? 'post' : 'posts'}…`, 60000);
-    const created = [];
-    for (const f of files) {
-      const type = f.type.startsWith('video/') ? 'video' : 'image';
-      const thumb = type === 'video' ? await videoThumb(f) : await imageThumb(f);
-      const p = { id: uid(), type, media: f, thumb, caption: '', posted: false, created: Date.now() };
+  async function autoThumb(p) {
+    if (p.customThumb && p.thumb) return;
+    p.customThumb = false;
+    p.thumb = p.slides[0] ? await mediaThumb(p.slides[0]) : null;
+  }
+
+  // ---------- Creating posts ----------
+  function newPost(fields) {
+    return { id: uid(), kind: 'post', title: '', slides: [], thumb: null, customThumb: false, caption: '', posted: false, created: Date.now(), ...fields };
+  }
+  function insertAtTop(ids) {
+    order = ids.concat(order);
+    saveOrder();
+  }
+  const kindFor = files => (files.length > 1 ? 'carousel' : isVideo(files[0]) ? 'reel' : 'post');
+  const mediaOnly = list => [...list].filter(f => /^(image|video)\//.test(f.type));
+
+  async function addFiles(fileList, mode = 'each') {
+    const files = mediaOnly(fileList);
+    if (!files.length) { toast('Only videos and photos can be added.'); return; }
+    toast(`Adding ${files.length} ${files.length === 1 ? 'file' : 'files'}…`, 60000);
+    const groups = mode === 'carousel' ? [files] : files.map(f => [f]);
+    const ids = [];
+    for (const g of groups) {
+      const p = newPost({ kind: kindFor(g), slides: g });
+      await autoThumb(p);
       posts.set(p.id, p);
-      created.push(p.id);
+      ids.push(p.id);
       persist(store.putPost(p));
     }
-    // The first file you picked posts first, so it sits lowest among the new ones.
-    order = created.reverse().concat(order);
-    saveOrder();
+    insertAtTop(ids); // first file picked lands top-left, same as reading the grid
     render();
-    toast(`Added ${files.length}. Drag tiles to rearrange.`);
+    toast(mode === 'carousel' ? `Carousel with ${files.length} slides added.` : `Added ${ids.length}. Drag cells to rearrange.`);
   }
+
+  // Fill one cell with media (from the picker or a file dropped on it).
+  async function addMediaTo(id, fileList) {
+    const p = posts.get(id);
+    const files = mediaOnly(fileList);
+    if (!p || !files.length) return;
+    const wasEmpty = p.slides.length === 0;
+    p.slides.push(...files);
+    if (p.slides.length > 1) p.kind = 'carousel';
+    else if (wasEmpty && isVideo(files[0]) && p.kind === 'post') p.kind = 'reel';
+    if (wasEmpty) await autoThumb(p);
+    savePost(p);
+    render();
+    if (openId === id) renderSheet();
+    toast(wasEmpty ? 'Cell filled.' : `Added ${files.length} more ${files.length === 1 ? 'slide' : 'slides'}.`);
+  }
+
+  function parseList(text) {
+    return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
+      const title = line.replace(/^\d+\s*[.\-\/):\]]*\s*/, '').trim() || line;
+      const t = title.toLowerCase();
+      const kind = /trial/.test(t) ? 'trial'
+        : /car+[aeo]?u?s+e?l/.test(t) ? 'carousel'
+        : /\bpost\b|static|photo|image|graphic/.test(t) ? 'post'
+        : 'reel'; // most planned content is video
+      return { title, kind };
+    });
+  }
+  function createFromList(text) {
+    const rows = parseList(text);
+    if (!rows.length) { toast('Paste at least one line.'); return false; }
+    const ids = rows.map(r => {
+      const p = newPost(r);
+      posts.set(p.id, p);
+      persist(store.putPost(p));
+      return p.id;
+    });
+    insertAtTop(ids);
+    render();
+    toast(`Created ${ids.length} cells. Tap one to add its video.`);
+    return true;
+  }
+
   function saveOrder() { persist(store.set('order', order)); }
+  function savePost(p) { persist(store.putPost(p)); }
 
   // ---------- Rendering ----------
   const $ = id => document.getElementById(id);
   const gridEl = $('grid');
   const listEl = $('schedList');
-  const reelIcon = '<svg width="18" height="18"><use href="#i-reel"/></svg>';
+  const icon = (name, size = 18) => `<svg width="${size}" height="${size}"><use href="#i-${name}"/></svg>`;
+  const kindIcon = (p, size) => (p.kind === 'carousel' ? icon('carousel', size) : p.kind === 'reel' || p.kind === 'trial' ? icon('reel', size) : '');
+  const placeholder = p => `<div class="ph" style="--h:${hue(p.id)}"><span>${esc(p.title || KINDS[p.kind])}</span><small>+ add video</small></div>`;
+
+  function tileHTML(p, when) {
+    return (p.thumb ? `<img alt="" draggable="false" src="${urlFor(p.thumb)}">` : placeholder(p)) +
+      (kindIcon(p) ? `<span class="kind">${kindIcon(p)}</span>` : '') +
+      (p.posted ? '<span class="when posted">Live</span>' : when ? `<span class="when">${fmtShort.format(when)}</span>` : '') +
+      (p.kind === 'trial' ? '<span class="trial">Trial</span>' : '');
+  }
 
   function render() {
     const dates = scheduleDates();
@@ -530,19 +777,28 @@
       const tile = document.createElement('div');
       tile.className = 'tile';
       tile.dataset.id = id;
-      const when = dates.get(id);
-      tile.innerHTML =
-        (p.thumb ? `<img alt="" draggable="false" src="${urlFor(p.thumb)}">` : '') +
-        (p.type === 'video' ? `<span class="kind">${reelIcon}</span>` : '') +
-        (p.posted ? '<span class="when posted">Live</span>' : when ? `<span class="when">${fmtShort.format(when)}</span>` : '');
+      tile.title = p.title || '';
+      tile.innerHTML = tileHTML(p, dates.get(id));
       gridEl.appendChild(tile);
     }
     if (posts.size) {
       const add = document.createElement('button');
       add.className = 'tile add-tile';
-      add.dataset.add = '1';
+      add.dataset.openAdd = '';
       add.innerHTML = '<span>+<br>Add</span>';
       gridEl.appendChild(add);
+    }
+
+    const reels = order.filter(id => ['reel', 'trial'].includes(posts.get(id).kind));
+    const reelsGrid = $('reelsGrid');
+    reelsGrid.innerHTML = '';
+    $('reelsEmpty').hidden = reels.length > 0;
+    for (const id of reels) {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.dataset.id = id;
+      tile.innerHTML = tileHTML(posts.get(id), dates.get(id));
+      reelsGrid.appendChild(tile);
     }
 
     listEl.innerHTML = '';
@@ -554,12 +810,14 @@
       const li = document.createElement('li');
       li.className = 'item';
       li.dataset.id = id;
+      const thumb = p.thumb ? `<span class="thumb" style="background-image:url('${urlFor(p.thumb)}')">${kindIcon(p, 12)}</span>`
+        : `<span class="thumb">${placeholder(p)}</span>`;
       li.innerHTML =
-        `<span class="num">${i + 1}</span>` +
-        `<span class="thumb" style="background-image:url('${urlFor(p.thumb)}')">${p.type === 'video' ? reelIcon.replace(/18/g, '14') : ''}</span>` +
-        `<span class="meta"><div class="date">${fmtLong.format(d)} · ${fmtTime.format(d)}</div><div class="cap"></div></span>` +
-        `<span class="grip" aria-label="Drag to reorder"><svg width="20" height="20"><use href="#i-grip"/></svg></span>`;
-      li.querySelector('.cap').textContent = p.caption || (p.type === 'video' ? 'Reel' : 'Photo');
+        `<span class="num">${i + 1}</span>${thumb}` +
+        `<span class="meta"><div class="date">${fmtLong.format(d)} · ${fmtTime.format(d)}</div>` +
+        `<div class="cap">${esc(p.title || p.caption || 'Untitled')}</div>` +
+        `<div class="sub">${KINDS[p.kind]}${p.slides.length ? '' : ' · needs media'}</div></span>` +
+        `<span class="grip" aria-label="Drag to reorder">${icon('grip', 20)}</span>`;
       listEl.appendChild(li);
     });
     const live = order.filter(id => posts.get(id).posted).length;
@@ -576,18 +834,20 @@
   function renderProfile() {
     $('username').textContent = profile.username;
     $('displayName').textContent = profile.name;
+    $('category').textContent = profile.category;
     $('bioText').textContent = profile.bio;
+    $('link').textContent = profile.link;
     $('followers').textContent = profile.followers;
     $('following').textContent = profile.following;
+    $('verifiedBtn').setAttribute('aria-pressed', String(!!profile.verified));
     renderAvatar();
   }
   function renderAvatar() {
-    const av = $('avatar');
-    if (avatarBlob) {
-      av.style.backgroundImage = `url('${urlFor(avatarBlob)}')`;
-      av.innerHTML = '';
-      $('miniAvatar').style.backgroundImage = `url('${urlFor(avatarBlob)}')`;
-    }
+    if (!avatarBlob) return;
+    const u = urlFor(avatarBlob);
+    $('avatar').style.backgroundImage = `url('${u}')`;
+    $('avatar').innerHTML = '';
+    $('miniAvatar').style.backgroundImage = `url('${u}')`;
   }
   function renderScheduleInputs() {
     $('startDate').value = schedule.start;
@@ -719,31 +979,97 @@
     },
   });
 
-  // ---------- Post sheet ----------
-  function openSheet(id) {
-    const p = posts.get(id);
-    if (!p) return;
-    openId = id;
-    const media = $('sheetMedia');
-    media.innerHTML = '';
-    if (p.type === 'video') {
-      const v = document.createElement('video');
-      v.src = urlFor(p.media); v.controls = true; v.playsInline = true; v.loop = true;
-      if (p.thumb) v.poster = urlFor(p.thumb);
-      media.appendChild(v);
-    } else {
-      const img = document.createElement('img');
-      img.src = urlFor(p.media); img.alt = '';
-      img.onerror = () => { img.onerror = null; img.src = urlFor(p.thumb); };
-      media.appendChild(img);
-    }
-    $('sheetCaption').value = p.caption;
-    $('sheetPosted').checked = p.posted;
-    $('frameBtn').hidden = p.type !== 'video';
-    fillSheetWhen();
-    $('sheet').hidden = false;
+  // ---------- Modals ----------
+  const openModals = [];
+  function openModal(id) {
+    $(id).hidden = false;
+    openModals.push(id);
     document.body.style.overflow = 'hidden';
   }
+  function closeModal(id) {
+    if (id === 'sheet') return closeSheet();
+    $(id).hidden = true;
+    const i = openModals.indexOf(id);
+    if (i >= 0) openModals.splice(i, 1);
+    if (!openModals.length) document.body.style.overflow = '';
+  }
+  document.querySelectorAll('.backdrop').forEach(b => {
+    b.addEventListener('click', e => {
+      if (e.target === b || e.target.closest('[data-close]')) closeModal(b.id);
+    });
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && openModals.length) closeModal(openModals[openModals.length - 1]);
+  });
+
+  // ---------- Post viewer / editor ----------
+  function openSheet(id) {
+    if (!posts.get(id)) return;
+    openId = id;
+    renderSheet();
+    openModal('sheet');
+    $('sheet').querySelector('.sheet').scrollTop = 0;
+  }
+  function closeSheet() {
+    document.querySelectorAll('#slides video').forEach(v => v.pause());
+    $('slides').innerHTML = '';
+    $('sheet').hidden = true;
+    const i = openModals.indexOf('sheet');
+    if (i >= 0) openModals.splice(i, 1);
+    if (!openModals.length) document.body.style.overflow = '';
+    openId = null;
+  }
+
+  function renderSheet() {
+    const p = posts.get(openId);
+    if (!p) return;
+    const slidesEl = $('slides');
+    slidesEl.innerHTML = '';
+    if (!p.slides.length) {
+      slidesEl.innerHTML = `<div class="slide-empty" style="background:hsl(${hue(p.id)} 22% 30%)"><div>` +
+        `<p>${esc(p.title || 'Empty cell')}</p><button class="btn" data-add-media>Add video or photo</button></div></div>`;
+    }
+    p.slides.forEach((blob, i) => {
+      const s = document.createElement('div');
+      s.className = 'slide';
+      if (isVideo(blob)) {
+        const v = document.createElement('video');
+        v.src = urlFor(blob); v.controls = true; v.playsInline = true; v.preload = 'metadata';
+        if (i === 0 && p.thumb) v.poster = urlFor(p.thumb);
+        v.addEventListener('timeupdate', syncScrub);
+        v.addEventListener('loadedmetadata', syncScrub);
+        s.appendChild(v);
+      } else {
+        const img = document.createElement('img');
+        img.src = urlFor(blob); img.alt = '';
+        img.onerror = () => { img.onerror = null; if (p.thumb) img.src = urlFor(p.thumb); };
+        s.appendChild(img);
+      }
+      const rm = document.createElement('button');
+      rm.className = 'rm';
+      rm.dataset.remove = i;
+      rm.setAttribute('aria-label', 'Remove this slide');
+      rm.innerHTML = icon('x', 16);
+      s.appendChild(rm);
+      slidesEl.appendChild(s);
+    });
+    slidesEl.scrollLeft = 0;
+    $('sheetTitle').value = p.title;
+    $('sheetCaption').value = p.caption;
+    $('sheetPosted').checked = p.posted;
+    $('addMediaBtn').textContent = p.slides.length ? 'Add another slide' : 'Add video or photo';
+    renderKind();
+    fillSheetWhen();
+    onSlideChange();
+  }
+
+  function renderKind() {
+    const p = posts.get(openId);
+    document.querySelectorAll('#sheetKind button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === p.kind)));
+    $('kindHint').textContent = KIND_HINTS[p.kind];
+    $('kindHint').hidden = !KIND_HINTS[p.kind];
+  }
+
   function fillSheetWhen() {
     const p = posts.get(openId);
     if (!p) return;
@@ -751,26 +1077,110 @@
     if (p.posted) { el.innerHTML = 'Live on your profile<small>Not part of the schedule</small>'; return; }
     const d = scheduleDates().get(openId);
     const n = queue().indexOf(openId) + 1;
-    el.innerHTML = `${fmtLong.format(d)} at ${fmtTime.format(d)}<small>Post #${n} in the queue · drag the tile to change</small>`;
-  }
-  function closeSheet() {
-    const v = $('sheetMedia').querySelector('video');
-    if (v) v.pause();
-    $('sheet').hidden = true;
-    $('sheetMedia').innerHTML = '';
-    document.body.style.overflow = '';
-    openId = null;
-  }
-  function savePost(p) { persist(store.putPost(p)); }
-  function setThumb(p, blob) {
-    if (p.thumb && p.thumb !== p.media) dropUrl(p.thumb);
-    p.thumb = blob;
-    savePost(p);
-    render();
-    const v = $('sheetMedia').querySelector('video');
-    if (v && blob) v.poster = urlFor(blob);
+    el.innerHTML = `${fmtLong.format(d)} at ${fmtTime.format(d)}<small>Post #${n} in the queue · drag the cell to change</small>`;
   }
 
+  const currentIndex = () => { const s = $('slides'); return s.clientWidth ? Math.round(s.scrollLeft / s.clientWidth) : 0; };
+  const currentVideo = () => { const s = $('slides').children[currentIndex()]; return s && s.querySelector('video'); };
+
+  function onSlideChange() {
+    const p = posts.get(openId);
+    if (!p) return;
+    const n = p.slides.length, i = currentIndex();
+    $('slideCount').hidden = n < 2;
+    $('slideCount').textContent = `${i + 1}/${n}`;
+    $('dots').innerHTML = n > 1 ? p.slides.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('') : '';
+    document.querySelectorAll('#slides video').forEach((v, k) => { if (v !== currentVideo()) v.pause(); });
+    renderCover();
+  }
+  let slideRaf;
+  $('slides').addEventListener('scroll', () => { cancelAnimationFrame(slideRaf); slideRaf = requestAnimationFrame(onSlideChange); });
+
+  // Grid thumbnail: live 3:4 preview of the saved cover, or of the frame you're scrubbing to.
+  let previewing = false;
+  function renderCover() {
+    const p = posts.get(openId);
+    const v = currentVideo();
+    const box = $('coverPreview');
+    previewing = false;
+    $('coverBox').hidden = !p.slides.length;
+    box.innerHTML = p.thumb ? `<img alt="" src="${urlFor(p.thumb)}">` : placeholder(p);
+    $('scrub').hidden = !v;
+    $('frameBtn').hidden = !v;
+    $('resetThumbBtn').hidden = !p.customThumb;
+    $('coverHint').textContent = v
+      ? 'Play the video or drag the slider to a frame, then tap “Use this frame”.'
+      : p.slides.length > 1 ? 'Swipe to a video slide to pick a frame, or upload any image.' : 'Upload a different image to use on the grid.';
+    syncScrub();
+  }
+  function previewFrame(v) {
+    if (!v.videoWidth) return;
+    let c = $('coverPreview').querySelector('canvas');
+    if (!c) { c = document.createElement('canvas'); $('coverPreview').innerHTML = ''; $('coverPreview').appendChild(c); }
+    const scale = Math.min(1, 320 / v.videoWidth);
+    c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    previewing = true;
+  }
+  function syncScrub(e) {
+    const v = currentVideo();
+    if (!v || (e && e.target !== v)) return;
+    if (v.duration) $('scrub').value = Math.round((v.currentTime / v.duration) * 1000);
+    if (e && e.type === 'timeupdate' && (previewing || !v.paused)) previewFrame(v);
+  }
+  $('scrub').addEventListener('input', e => {
+    const v = currentVideo();
+    if (!v || !v.duration) return;
+    v.pause();
+    v.currentTime = (e.target.value / 1000) * v.duration;
+    v.addEventListener('seeked', () => previewFrame(v), { once: true });
+  });
+
+  async function setThumb(p, blob, custom) {
+    if (p.thumb && !p.slides.includes(p.thumb)) dropUrl(p.thumb);
+    p.thumb = blob;
+    p.customThumb = custom;
+    savePost(p);
+    render();
+    renderCover();
+    const first = $('slides').querySelector('.slide video');
+    if (first && blob && isVideo(p.slides[0])) first.poster = urlFor(blob);
+  }
+
+  $('frameBtn').addEventListener('click', async () => {
+    const p = posts.get(openId);
+    const v = currentVideo();
+    if (!p || !v || !v.videoWidth) { toast('Play or scrub the video to the frame you want first.'); return; }
+    v.pause();
+    const blob = await drawScaled(v, v.videoWidth, v.videoHeight);
+    if (blob) { await setThumb(p, blob, true); toast('Thumbnail set.'); }
+  });
+  $('thumbBtn').addEventListener('click', () => $('thumbInput').click());
+  $('thumbInput').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    const p = posts.get(openId);
+    if (!f || !p) return;
+    await setThumb(p, await imageThumb(f), true);
+    toast('Thumbnail set.');
+  });
+  $('resetThumbBtn').addEventListener('click', async () => {
+    const p = posts.get(openId); if (!p) return;
+    p.customThumb = false;
+    await autoThumb(p);
+    await setThumb(p, p.thumb, false);
+    toast('Thumbnail reset.');
+  });
+
+  $('sheetTitle').addEventListener('input', e => {
+    const p = posts.get(openId); if (!p) return;
+    p.title = e.target.value; savePost(p); render();
+  });
+  $('sheetKind').addEventListener('click', e => {
+    const b = e.target.closest('[data-kind]');
+    const p = posts.get(openId);
+    if (!b || !p) return;
+    p.kind = b.dataset.kind; savePost(p); renderKind(); render();
+  });
   $('sheetCaption').addEventListener('input', e => {
     const p = posts.get(openId); if (!p) return;
     p.caption = e.target.value; savePost(p); render();
@@ -779,51 +1189,71 @@
     const p = posts.get(openId); if (!p) return;
     p.posted = e.target.checked; savePost(p); render();
   });
-  $('frameBtn').addEventListener('click', async () => {
+
+  let mediaTarget = null;
+  function pickMediaFor(id) { mediaTarget = id; $('mediaInput').click(); }
+  $('addMediaBtn').addEventListener('click', () => pickMediaFor(openId));
+  $('slides').addEventListener('click', async e => {
+    if (e.target.closest('[data-add-media]')) return pickMediaFor(openId);
+    const rm = e.target.closest('[data-remove]');
     const p = posts.get(openId);
-    const v = $('sheetMedia').querySelector('video');
-    if (!p || !v || !v.videoWidth) { toast('Play or scrub the video to the frame you want first.'); return; }
-    v.pause();
-    const blob = await drawScaled(v, v.videoWidth, v.videoHeight);
-    if (blob) { setThumb(p, blob); toast('Cover updated.'); }
+    if (!rm || !p) return;
+    if (!confirm('Remove this slide?')) return;
+    const [gone] = p.slides.splice(Number(rm.dataset.remove), 1);
+    dropUrl(gone);
+    if (!p.customThumb || !p.slides.length) { p.customThumb = false; await autoThumb(p); }
+    if (p.kind === 'carousel' && p.slides.length === 1) p.kind = isVideo(p.slides[0]) ? 'reel' : 'post';
+    savePost(p); render(); renderSheet();
   });
-  $('thumbBtn').addEventListener('click', () => $('thumbInput').click());
-  $('thumbInput').addEventListener('change', async e => {
-    const f = e.target.files[0]; e.target.value = '';
-    const p = posts.get(openId);
-    if (!f || !p) return;
-    setThumb(p, await imageThumb(f));
-    toast('Thumbnail updated.');
+  $('mediaInput').addEventListener('change', e => {
+    const files = [...e.target.files]; e.target.value = '';
+    const target = mediaTarget || openId;
+    mediaTarget = null;
+    if (target && files.length) addMediaTo(target, files);
   });
-  $('resetThumbBtn').addEventListener('click', async () => {
-    const p = posts.get(openId); if (!p) return;
-    setThumb(p, p.type === 'video' ? await videoThumb(p.media) : await imageThumb(p.media));
-    toast('Thumbnail reset.');
-  });
+
   $('deleteBtn').addEventListener('click', () => {
     const p = posts.get(openId); if (!p) return;
-    if (!confirm('Delete this post from the planner?')) return;
+    if (!confirm('Delete this cell from the planner?')) return;
     closeSheet();
-    dropUrl(p.thumb); dropUrl(p.media);
+    dropUrl(p.thumb); p.slides.forEach(dropUrl);
     posts.delete(p.id);
     order = order.filter(id => id !== p.id);
     persist(store.deletePost(p.id));
     saveOrder(); render();
   });
-  $('closeBtn').addEventListener('click', closeSheet);
-  $('sheet').addEventListener('click', e => { if (e.target === e.currentTarget) closeSheet(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
 
   // ---------- Wiring ----------
-  const pick = () => $('fileInput').click();
-  ['addTop', 'addBtn', 'addEmpty', 'addNav'].forEach(id => $(id).addEventListener('click', pick));
-  $('fileInput').addEventListener('change', e => { const f = e.target.files; if (f.length) addFiles([...f]); e.target.value = ''; });
+  let pickMode = 'each';
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-open-add], [data-open-paste], [data-pick], [data-add-placeholder], [data-goto]');
+    if (!t) return;
+    if (t.matches('[data-open-add]')) openModal('addMenu');
+    else if (t.matches('[data-open-paste]')) { closeModal('addMenu'); openModal('pasteModal'); setTimeout(() => $('pasteText').focus(), 50); }
+    else if (t.matches('[data-pick]')) { pickMode = t.dataset.pick; closeModal('addMenu'); $('fileInput').click(); }
+    else if (t.matches('[data-add-placeholder]')) {
+      closeModal('addMenu');
+      const p = newPost({ kind: 'reel', title: '' });
+      posts.set(p.id, p); savePost(p); insertAtTop([p.id]); render();
+      setTab('grid');
+      openSheet(p.id);
+      setTimeout(() => $('sheetTitle').focus(), 50);
+    } else if (t.matches('[data-goto]')) {
+      setTab(t.dataset.goto);
+      if (t.matches('[data-scroll-top]')) window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  });
+  $('fileInput').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) addFiles(f, pickMode); });
+  $('pasteCreate').addEventListener('click', () => {
+    if (createFromList($('pasteText').value)) { $('pasteText').value = ''; closeModal('pasteModal'); setTab('grid'); }
+  });
 
-  gridEl.addEventListener('click', e => {
-    if (e.target.closest('[data-add]')) return pick();
+  function onTileClick(e) {
     const tile = e.target.closest('.tile[data-id]');
     if (tile) openSheet(tile.dataset.id);
-  });
+  }
+  gridEl.addEventListener('click', onTileClick);
+  $('reelsGrid').addEventListener('click', onTileClick);
   listEl.addEventListener('click', e => {
     if (e.target.closest('.grip')) return;
     const item = e.target.closest('.item');
@@ -831,29 +1261,30 @@
   });
 
   function setTab(tab) {
+    currentTab = tab;
     document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === tab)));
     $('gridView').hidden = tab !== 'grid';
+    $('reelsView').hidden = tab !== 'reels';
     $('scheduleView').hidden = tab !== 'schedule';
     try { localStorage.setItem('feed-planner-tab', tab); } catch {}
   }
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
-  document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.goto)));
-  document.querySelectorAll('[data-scroll-top]').forEach(b => b.addEventListener('click', () => { setTab('grid'); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
-  $('schedBtn').addEventListener('click', () => setTab('schedule'));
 
   // Profile editing
-  const profileFields = { username: 'username', displayName: 'name', bioText: 'bio', followers: 'followers', following: 'following' };
+  const profileFields = { username: 'username', displayName: 'name', category: 'category', bioText: 'bio', link: 'link', followers: 'followers', following: 'following' };
   let profileTimer;
+  const saveProfile = () => { clearTimeout(profileTimer); profileTimer = setTimeout(() => persist(store.set('profile', profile)), 300); };
   for (const [elId, key] of Object.entries(profileFields)) {
     const el = $(elId);
-    el.addEventListener('input', () => {
-      profile[key] = el.textContent;
-      clearTimeout(profileTimer);
-      profileTimer = setTimeout(() => persist(store.set('profile', profile)), 300);
-    });
+    el.addEventListener('input', () => { profile[key] = el.textContent; saveProfile(); });
     if (key !== 'bio') el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
   }
-  $('avatarBtn').addEventListener('click', () => $('avatarInput').click());
+  $('verifiedBtn').addEventListener('click', () => {
+    profile.verified = !profile.verified;
+    $('verifiedBtn').setAttribute('aria-pressed', String(profile.verified));
+    saveProfile();
+  });
+  $('avatar').addEventListener('click', () => $('avatarInput').click());
   $('avatarInput').addEventListener('change', async e => {
     const f = e.target.files[0]; e.target.value = '';
     if (!f) return;
@@ -875,16 +1306,30 @@
   }
   ['startDate', 'postTime', 'everyDays'].forEach(id => $(id).addEventListener('change', onScheduleChange));
 
-  // Drag files from your computer onto the page
-  let dragDepth = 0;
+  // Drag files from your computer: onto a cell fills that cell, anywhere else adds new cells.
+  let dragDepth = 0, dropTile = null;
   const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  function markDropTile(el) {
+    if (dropTile === el) return;
+    if (dropTile) dropTile.classList.remove('drop-target');
+    dropTile = el;
+    if (dropTile) dropTile.classList.add('drop-target');
+  }
   window.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('dropOverlay').hidden = false; });
-  window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
-  window.addEventListener('dragleave', e => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; $('dropOverlay').hidden = true; } });
+  window.addEventListener('dragover', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    markDropTile(e.target.closest && e.target.closest('.tile[data-id]'));
+  });
+  window.addEventListener('dragleave', e => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; $('dropOverlay').hidden = true; markDropTile(null); } });
   window.addEventListener('drop', e => {
     if (!hasFiles(e)) return;
     e.preventDefault(); dragDepth = 0; $('dropOverlay').hidden = true;
-    addFiles(e.dataTransfer.files);
+    const tile = e.target.closest && e.target.closest('.tile[data-id]');
+    markDropTile(null);
+    if (openId && !$('sheet').hidden) addMediaTo(openId, e.dataTransfer.files);
+    else if (tile) addMediaTo(tile.dataset.id, e.dataTransfer.files);
+    else addFiles(e.dataTransfer.files);
   });
 
   let toastTimer;
@@ -901,7 +1346,10 @@
       const [saved, savedOrder, savedProfile, savedSchedule, savedAvatar] = await Promise.all([
         store.allPosts(), store.get('order'), store.get('profile'), store.get('schedule'), store.get('avatar'),
       ]);
-      saved.forEach(p => posts.set(p.id, p));
+      for (const p of saved) {
+        if (normalize(p)) savePost(p);
+        posts.set(p.id, p);
+      }
       const known = new Set(posts.keys());
       order = (savedOrder || []).filter(id => known.has(id));
       for (const id of known) if (!order.includes(id)) order.unshift(id);
@@ -915,7 +1363,7 @@
     try { tab = localStorage.getItem('feed-planner-tab') || 'grid'; } catch {}
     renderProfile();
     renderScheduleInputs();
-    setTab(tab === 'schedule' ? 'schedule' : 'grid');
+    setTab(['grid', 'reels', 'schedule'].includes(tab) ? tab : 'grid');
     render();
   })();
 })();

@@ -14,3 +14,5 @@ A phone-style profile grid for planning posts. Open `index.html` in a browser (p
 - **Videos are compressed automatically** to a lighter 720p copy (H.264 MP4 in Chrome, Safari and Edge) so the planner stays fast. Your original files are not changed. Turn it off under **Add**.
 
 Everything is saved in the browser you use (IndexedDB), so it survives refreshes but stays on that device and browser.
+
+**Backup**: tap the download icon at the top, then **Save** to get one `.zip` with your whole plan (posts, videos, thumbnails, profile and schedule). **Restore** loads a backup into any browser, replacing what is there.

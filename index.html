@@ -243,6 +243,14 @@
   .menu button:hover { background: var(--chip); }
   .menu b { display: block; font-weight: 600; }
   .menu small { color: var(--muted); }
+  .backup-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--chip); }
+  .backup-row > div { flex: 1; min-width: 0; }
+  .backup-row b { display: block; font-weight: 600; }
+  .backup-row small { color: var(--muted); }
+  .backup-row .btn { flex: none; min-width: 84px; height: 34px; background: var(--sheet); }
+  .backup-row .btn.primary { background: var(--accent); }
+  .restore-confirm { padding: 12px; border-radius: 12px; border: 1px solid var(--danger); display: grid; gap: 10px; }
+  .restore-confirm p { margin: 0; }
   .menu-setting { gap: 16px; margin: 0 8px 12px; padding: 12px 10px 4px; border-top: 1px solid var(--line); }
   .menu-setting b { display: block; font-weight: 600; }
   .menu-setting small { color: var(--muted); }
@@ -332,6 +340,9 @@
       <span id="username" contenteditable="plaintext-only" spellcheck="false" data-placeholder="username"></span>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
     </div>
+    <button class="icon-btn" data-open-backup aria-label="Backup" title="Backup">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+    </button>
     <button class="icon-btn" data-open-add aria-label="Add">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
     </button>
@@ -481,6 +492,33 @@
   </div>
 </div>
 
+<!-- Backup -->
+<div class="backdrop" id="backupModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Backup">
+    <div class="grabber"></div>
+    <div class="sheet-title">Backup</div>
+    <div class="sheet-body">
+      <div class="hint">Your plan is saved in this browser only. A backup file holds everything (posts, videos, thumbnails, profile and schedule) so you can keep it safe or open it on another computer.</div>
+      <div class="backup-row">
+        <div><b>Save backup file</b><small id="lastBackup">No backup saved yet.</small></div>
+        <button class="btn primary" id="backupSave">Save</button>
+      </div>
+      <div class="backup-row">
+        <div><b>Restore from backup</b><small>Replaces what's in the planner now with the backup.</small></div>
+        <button class="btn" id="backupLoad">Restore</button>
+      </div>
+      <div class="restore-confirm" id="restoreConfirm" hidden>
+        <p id="restoreText"></p>
+        <div class="sheet-btns">
+          <button class="btn" id="restoreCancel">Cancel</button>
+          <button class="btn danger armed" id="restoreGo">Replace my plan</button>
+        </div>
+      </div>
+      <div class="hint" id="backupStatus" hidden></div>
+    </div>
+  </div>
+</div>
+
 <!-- Paste list -->
 <div class="backdrop" id="pasteModal" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Paste a list">
@@ -559,6 +597,7 @@
 <input type="file" id="mediaInput" accept="image/*,video/*" multiple hidden>
 <input type="file" id="avatarInput" accept="image/*" hidden>
 <input type="file" id="thumbInput" accept="image/*" hidden>
+<input type="file" id="backupInput" accept=".zip,application/zip" hidden>
 
 <svg width="0" height="0" style="position:absolute">
   <symbol id="i-reel" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm5 6v7l6-3.5z"/></symbol>
@@ -638,6 +677,20 @@
       deleteMedia: id => run('media', 'readwrite', s => s.delete(id)),
       get: k => run('kv', 'readonly', s => s.get(k)),
       set: (k, v) => run('kv', 'readwrite', s => s.put(v, k)),
+      // Restore: wipe everything and write the backup in one transaction, so it's all-or-nothing.
+      async replaceAll({ posts, media, kv }) {
+        const db = await open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(['posts', 'media', 'kv'], 'readwrite');
+          const [ps, ms, ks] = ['posts', 'media', 'kv'].map(n => tx.objectStore(n));
+          ps.clear(); ms.clear(); ks.clear();
+          posts.forEach(p => ps.put(p));
+          media.forEach(([id, blob]) => ms.put(blob, id));
+          kv.forEach(([k, v]) => ks.put(v, k));
+          tx.oncomplete = () => resolve();
+          tx.onerror = tx.onabort = () => reject(tx.error);
+        });
+      },
     };
   })();
 
@@ -1656,11 +1709,217 @@
     toastTimer = setTimeout(() => { t.hidden = true; }, ms);
   }
 
+  // ---------- Backup (one .zip with the plan as JSON plus every file) ----------
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  // Minimal ZIP writer: files are stored as-is (videos are already compressed), so the archive is built
+  // from the original Blobs without holding everything in memory at once.
+  async function buildZip(entries, onEach) {
+    const enc = new TextEncoder();
+    const parts = [], central = [];
+    let offset = 0;
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    for (let i = 0; i < entries.length; i++) {
+      const { name, blob } = entries[i];
+      const nameBytes = enc.encode(name);
+      const crc = crc32(new Uint8Array(await blob.arrayBuffer()));
+      const size = blob.size;
+      if (offset + size > 0xF0000000) throw new Error('too_big');
+      const head = new DataView(new ArrayBuffer(30));
+      head.setUint32(0, 0x04034b50, true); head.setUint16(4, 20, true); head.setUint16(6, 0x0800, true);
+      head.setUint16(8, 0, true); head.setUint16(10, dosTime, true); head.setUint16(12, dosDate, true);
+      head.setUint32(14, crc, true); head.setUint32(18, size, true); head.setUint32(22, size, true);
+      head.setUint16(26, nameBytes.length, true); head.setUint16(28, 0, true);
+      parts.push(head.buffer, nameBytes, blob);
+      const cd = new DataView(new ArrayBuffer(46));
+      cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true); cd.setUint16(8, 0x0800, true);
+      cd.setUint16(10, 0, true); cd.setUint16(12, dosTime, true); cd.setUint16(14, dosDate, true);
+      cd.setUint32(16, crc, true); cd.setUint32(20, size, true); cd.setUint32(24, size, true);
+      cd.setUint16(28, nameBytes.length, true); cd.setUint32(42, offset, true);
+      central.push(cd.buffer, nameBytes);
+      offset += 30 + nameBytes.length + size;
+      onEach && onEach(i + 1, entries.length);
+    }
+    const cdSize = central.reduce((n, b) => n + b.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+  }
+  // Reads the stored (uncompressed) ZIPs this planner writes. Returns name -> Blob slice.
+  async function readZip(file) {
+    const tailStart = Math.max(0, file.size - 65557);
+    const tail = new DataView(await file.slice(tailStart).arrayBuffer());
+    let eocd = -1;
+    for (let i = tail.byteLength - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error('not_zip');
+    const count = tail.getUint16(eocd + 10, true);
+    const cdSize = tail.getUint32(eocd + 12, true), cdOffset = tail.getUint32(eocd + 16, true);
+    const cd = new DataView(await file.slice(cdOffset, cdOffset + cdSize).arrayBuffer());
+    const dec = new TextDecoder();
+    const out = new Map();
+    for (let i = 0, p = 0; i < count; i++) {
+      if (cd.getUint32(p, true) !== 0x02014b50) throw new Error('not_zip');
+      const method = cd.getUint16(p + 10, true), size = cd.getUint32(p + 20, true);
+      const nameLen = cd.getUint16(p + 28, true), extraLen = cd.getUint16(p + 30, true), commentLen = cd.getUint16(p + 32, true);
+      const local = cd.getUint32(p + 42, true);
+      const name = dec.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nameLen));
+      p += 46 + nameLen + extraLen + commentLen;
+      if (method !== 0) continue; // not something this planner wrote
+      const lh = new DataView(await file.slice(local, local + 30).arrayBuffer());
+      const start = local + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+      out.set(name, file.slice(start, start + size));
+    }
+    return out;
+  }
+
+  const extFor = (blob, fallback) => (extOf(blob) && extOf(blob) !== (blob.name || '').toLowerCase() ? extOf(blob)
+    : ({ 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[blob.type] || fallback));
+  const fmtDateTime = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  function showBackupStatus(msg) { $('backupStatus').hidden = !msg; $('backupStatus').textContent = msg || ''; }
+  async function renderLastBackup() {
+    let at = null;
+    try { at = await store.get('lastBackup'); } catch {}
+    $('lastBackup').textContent = at ? `Last saved ${fmtDateTime.format(new Date(at))}.` : 'No backup saved yet.';
+  }
+
+  // Hands the file to the viewer: through Claude's save prompt when the page runs inside Claude,
+  // otherwise as a normal browser download.
+  async function offerFile(filename, blob) {
+    const claudeHost = window.claude && typeof window.claude.use === 'function';
+    const downloads = claudeHost ? await window.claude.use('downloads').catch(() => null) : null;
+    if (downloads) { await downloads.save({ filename, data: blob }); return; }
+    if (claudeHost) throw { code: 'unavailable' };
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+  }
+
+  async function saveBackup() {
+    const btn = $('backupSave');
+    btn.disabled = true;
+    showBackupStatus('Preparing backup…');
+    try {
+      const entries = [];
+      const plan = { app: 'dreamvision-feed-planner', version: 1, exportedAt: new Date().toISOString(), order, profile, schedule, settings, posts: [], avatar: null };
+      for (const id of order) {
+        const p = posts.get(id);
+        const rec = { ...p, thumb: null, slides: [] };
+        if (p.thumb) { rec.thumb = { file: `thumbs/${p.id}.${extFor(p.thumb, 'jpg')}`, type: p.thumb.type || 'image/jpeg' }; entries.push({ name: rec.thumb.file, blob: p.thumb }); }
+        for (const slide of p.slides) {
+          const blob = await loadMedia(slide);
+          if (!blob) continue; // file no longer in this browser
+          const file = `media/${slide.id}.${extFor(slide, blob.type.startsWith('video/') ? 'mp4' : 'jpg')}`;
+          rec.slides.push({ ...slide, file });
+          entries.push({ name: file, blob });
+        }
+        plan.posts.push(rec);
+      }
+      if (avatarBlob) { plan.avatar = { file: `avatar.${extFor(avatarBlob, 'jpg')}`, type: avatarBlob.type || 'image/jpeg' }; entries.push({ name: plan.avatar.file, blob: avatarBlob }); }
+      entries.unshift({ name: 'planner.json', blob: new Blob([JSON.stringify(plan, null, 1)], { type: 'application/json' }) });
+      const zip = await buildZip(entries, (n, total) => showBackupStatus(`Preparing backup… ${n} of ${total} files`));
+      const mb = (zip.size / 1048576).toFixed(1);
+      showBackupStatus(`Backup ready (${mb} MB). Confirm the save to keep it.`);
+      const handle = (profile.username || 'feed').replace(/[^\w.-]+/g, '-');
+      await offerFile(`${handle}-plan-${todayISO()}.zip`, zip);
+      const at = Date.now();
+      persist(store.set('lastBackup', at));
+      $('lastBackup').textContent = `Last saved ${fmtDateTime.format(new Date(at))}.`;
+      showBackupStatus(`Saved ${plan.posts.length} posts (${mb} MB). Keep the file somewhere safe, like iCloud Drive or Google Drive.`);
+    } catch (err) {
+      const code = err && err.code;
+      showBackupStatus(
+        code === 'declined' ? 'Backup not saved.' :
+        code === 'rate_limited' ? 'A save prompt is already open. Finish that one first.' :
+        code === 'too_large' ? 'This backup is too large to save here. Try from a computer.' :
+        err && err.message === 'too_big' ? 'This plan is over 4 GB, too big for one backup. Turn on Compress videos and re-add the largest videos.' :
+        code ? "Saving files isn't available in this view. Open the planner in a browser to save a backup." :
+        "Couldn't create the backup. Try again, or reload the page first.");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  let pendingRestore = null;
+  async function pickRestore(file) {
+    showBackupStatus('Reading backup…');
+    try {
+      const files = await readZip(file);
+      const planBlob = files.get('planner.json');
+      if (!planBlob) throw new Error('not_backup');
+      const plan = JSON.parse(await planBlob.text());
+      if (plan.app !== 'dreamvision-feed-planner' || !Array.isArray(plan.posts)) throw new Error('not_backup');
+      pendingRestore = { plan, files };
+      const when = plan.exportedAt ? fmtDateTime.format(new Date(plan.exportedAt)) : 'an unknown date';
+      $('restoreText').textContent = `Replace everything in the planner with this backup from ${when} (${plan.posts.length} posts)? What's in the planner now will be removed.`;
+      $('restoreConfirm').hidden = false;
+      showBackupStatus('');
+    } catch {
+      pendingRestore = null;
+      showBackupStatus("That file isn't a planner backup. Choose a .zip saved with “Save backup file”.");
+    }
+  }
+  async function runRestore() {
+    if (!pendingRestore) return;
+    const { plan, files } = pendingRestore;
+    const asFile = (ref, name) => { const b = ref && files.get(ref.file); return b ? new File([b], name || ref.file.split('/').pop(), { type: ref.type || '' }) : null; };
+    const media = [];
+    const restoredPosts = plan.posts.map(rec => {
+      const p = { ...rec, thumb: asFile(rec.thumb), slides: [] };
+      for (const s of rec.slides || []) {
+        const blob = asFile(s, s.name);
+        if (!blob) continue;
+        media.push([s.id, blob]);
+        p.slides.push({ id: s.id, type: s.type, name: s.name });
+      }
+      return p;
+    });
+    const kv = [['order', plan.order || restoredPosts.map(p => p.id)], ['profile', plan.profile || {}], ['schedule', plan.schedule || {}], ['settings', plan.settings || {}]];
+    const avatar = asFile(plan.avatar);
+    if (avatar) kv.push(['avatar', avatar]);
+    showBackupStatus('Restoring…');
+    try {
+      await store.replaceAll({ posts: restoredPosts, media, kv });
+      showBackupStatus('Restored. Reloading…');
+      setTimeout(() => location.reload(), 400);
+    } catch {
+      showBackupStatus("Couldn't restore the backup in this browser. Nothing was changed.");
+    }
+  }
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-open-backup]')) {
+      $('restoreConfirm').hidden = true; pendingRestore = null; showBackupStatus('');
+      renderLastBackup();
+      openModal('backupModal');
+    }
+  });
+  $('backupSave').addEventListener('click', saveBackup);
+  $('backupLoad').addEventListener('click', () => $('backupInput').click());
+  $('backupInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) pickRestore(f); });
+  $('restoreCancel').addEventListener('click', () => { pendingRestore = null; $('restoreConfirm').hidden = true; });
+  $('restoreGo').addEventListener('click', runRestore);
+
   // ---------- Boot ----------
   // A flag that's still set at the next launch means the last one never finished (e.g. the tab crashed).
   let lastLaunchFailed = false;
   try { lastLaunchFailed = localStorage.getItem('feed-planner-booting') === '1'; localStorage.setItem('feed-planner-booting', '1'); } catch {}
   $('recover').hidden = !lastLaunchFailed;
+  // Closing or reloading normally isn't a crash, so clear the flag then too.
+  window.addEventListener('pagehide', () => { try { localStorage.removeItem('feed-planner-booting'); } catch {} });
   $('recoverOk').addEventListener('click', () => { $('recover').hidden = true; });
   $('recoverClear').addEventListener('click', e => confirmTap(e.currentTarget, 'Tap again to erase everything', () => {
     try { localStorage.removeItem('feed-planner-booting'); } catch {}

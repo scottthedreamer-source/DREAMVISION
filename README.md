@@ -33,7 +33,7 @@ Everything is saved in the browser you use (IndexedDB), so it survives refreshes
 
 `LinkedIn Previewer.html` shows how posts will read in the feed, with your profile on top.
 
-- **Profile**: click the banner, photo, name, headline, company, location or connections to change them. Switch between **Person** (round photo, Connect) and **Company** (square logo, Follow).
+- **Profile**: the banner shows LinkedIn's recommended size (1584 × 396 px, 4:1 for a person; 1512 × 256 px for a company) and warns if an upload will be cropped. Click the banner, photo, name, headline, company, location or connections to change them. Switch between **Person** (round photo, Connect) and **Company** (square logo, Follow).
 - **Posts**: each post shows your photo, name, headline, the link under your name, the time, the text cut at "… more", images (LinkedIn-style layouts for 1 to 20 images) or one video, and reaction/comment/repost counts.
 - **Desktop / Phone** toggle: "… more" cuts at a different spot on each. Turn on **Show where "…more" cuts the text** to mark the fold.
 - **Edit a post** to see a live preview while you write; the counter warns past LinkedIn's 3,000 characters.

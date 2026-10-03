@@ -96,7 +96,11 @@
   /* Profile / company card */
   .pcard-profile { background: var(--card); border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); position: relative; }
   .banner { position: relative; aspect-ratio: 4 / 1; background: linear-gradient(120deg, #a0b4b7, #d6dfe1); max-width: 100%; }
-  body.company .banner { aspect-ratio: 6 / 1; }
+  body.company .banner { aspect-ratio: 1512 / 256; }
+  .banner-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 0 16px; color: rgba(0,0,0,.65); font-weight: 600; }
+  .banner-empty small { display: block; font-weight: 400; }
+  .banner-tools .spec { height: 30px; padding: 0 10px; border-radius: 15px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; display: inline-flex; align-items: center; }
+  body.phone .banner-tools .spec { display: none; }
   .banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .banner-tools { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; }
   .banner-tools button { height: 30px; padding: 0 12px; border-radius: 15px; background: rgba(0,0,0,.6); color: #fff; font-size: 13px; font-weight: 600; }
@@ -105,9 +109,9 @@
     border: 4px solid var(--card); background: var(--chip) center/cover no-repeat; display: grid; place-items: center; color: var(--muted);
     top: calc(min(804px, 100vw - 32px) / 4 - 112px);
   }
-  body.company .avatar { border-radius: 6px; width: 128px; height: 128px; top: calc(min(804px, 100vw - 32px) / 6 - 72px); }
+  body.company .avatar { border-radius: 6px; width: 128px; height: 128px; top: calc(min(804px, 100vw - 32px) * 256 / 1512 - 72px); }
   body.phone .avatar { width: 96px; height: 96px; left: 16px; top: calc(min(375px, 100vw - 32px) / 4 - 64px); }
-  body.phone.company .avatar { width: 80px; height: 80px; top: calc(min(375px, 100vw - 32px) / 6 - 40px); }
+  body.phone.company .avatar { width: 80px; height: 80px; top: calc(min(375px, 100vw - 32px) * 256 / 1512 - 40px); }
   .pinfo { padding: 56px 24px 20px; display: grid; gap: 4px; }
   body.company .pinfo { padding-top: 76px; }
   body.phone .pinfo { padding: 44px 16px 16px; }
@@ -329,7 +333,8 @@
   <section class="col-profile" id="profileCol">
     <div class="pcard-profile">
       <div class="banner" id="banner">
-        <div class="banner-tools"><button id="bannerRemove" hidden>Remove</button><button id="bannerBtn">Add banner</button></div>
+        <div class="banner-empty" id="bannerEmpty"></div>
+        <div class="banner-tools"><span class="spec" id="bannerSpec"></span><button id="bannerRemove" hidden>Remove</button><button id="bannerBtn">Add banner</button></div>
       </div>
       <div class="avatar" id="avatar" title="Change photo or logo">
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
@@ -964,7 +969,17 @@
       : '<span class="pill solid">+ Connect</span><span class="pill">Message</span>';
     renderImages();
   }
+  // LinkedIn's upload specs: personal banner 1584 × 396 (4:1); company cover 1512 × 256 (about 5.9:1).
+  const BANNER_SPECS = {
+    person: { w: 1584, h: 396, ratio: '4:1', note: 'JPG or PNG under 8 MB' },
+    company: { w: 1512, h: 256, ratio: 'about 5.9:1', note: 'JPG or PNG under 3 MB' },
+  };
+  const bannerSpec = () => BANNER_SPECS[profile.mode] || BANNER_SPECS.person;
   function renderImages() {
+    const spec = bannerSpec();
+    $('bannerSpec').textContent = `Recommended ${spec.w} × ${spec.h} px (${spec.ratio})`;
+    $('bannerEmpty').hidden = !!bannerBlob;
+    $('bannerEmpty').innerHTML = `<div>Add a banner image<small>Recommended ${spec.w} × ${spec.h} px (${spec.ratio}), ${spec.note}</small></div>`;
     if (avatarBlob) { $('avatar').style.backgroundImage = `url('${urlFor(avatarBlob)}')`; $('avatar').innerHTML = ''; }
     const banner = $('banner');
     banner.querySelector('img')?.remove();
@@ -1360,8 +1375,22 @@
   $('bannerInput').addEventListener('change', async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     if (bannerBlob) dropUrl(bannerBlob);
-    bannerBlob = (await prepImage(f, 2400)).blob;
+    const prepped = await prepImage(f, 2400);
+    bannerBlob = prepped.blob;
     persist(store.set('banner', bannerBlob)); renderImages();
+    const spec = bannerSpec();
+    if (prepped.w && prepped.h) {
+      const ratio = prepped.w / prepped.h, target = spec.w / spec.h;
+      const bmp = await createImageBitmap(f).catch(() => null);
+      const origW = bmp ? bmp.width : 0, origH = bmp ? bmp.height : 0;
+      if (bmp && bmp.close) bmp.close();
+      const size = origW ? `${origW} × ${origH} px` : 'a different shape';
+      if (Math.abs(ratio - target) / target > 0.03) {
+        toast(`Your image is ${size}. LinkedIn shows this banner at ${spec.ratio}, so it will be cropped like this preview. For no cropping, export at ${spec.w} × ${spec.h} px.`, 9000);
+      } else if (origW && origW < spec.w) {
+        toast(`Right shape, but ${size} is smaller than LinkedIn's ${spec.w} × ${spec.h} px and may look soft.`, 7000);
+      } else toast(`Banner fits LinkedIn's ${spec.w} × ${spec.h} px (${spec.ratio}).`);
+    }
   });
   $('bannerRemove').addEventListener('click', e => confirmTap(e.currentTarget, 'Tap again', () => { dropUrl(bannerBlob); bannerBlob = null; persist(store.set('banner', null)); renderImages(); }));
 

@@ -39,3 +39,9 @@ Everything is saved in the browser you use (IndexedDB), so it survives refreshes
 - **Edit a post** to see a live preview while you write; the counter warns past LinkedIn's 3,000 characters.
 - **Paste list**: one post idea per line, or full drafts separated by a line with `---`.
 - Drag posts to reorder (top = newest), schedule, video compression and **Backup** work like the other previewers.
+
+## Clean screenshots (all three previewers)
+
+- Banner buttons (Change banner, Remove, size label) only appear while the mouse is over the banner.
+- Click **Preview** (the eye icon) to hide every editing control: the toolbar, banner buttons, schedule date badges, "+ Add" cards, hints and editing outlines. Empty counts show as "0" and empty bio/link lines disappear, so the page looks like the real app. The Instagram Previewer swaps its planning buttons for Follow / Message.
+- Press **Esc** to leave Preview, or move the mouse to the top-right corner (tap the screen on a phone) to show an "Exit preview" button, which fades away again on its own.

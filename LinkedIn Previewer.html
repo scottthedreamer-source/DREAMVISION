@@ -81,7 +81,7 @@
   @media (max-width: 760px) {
     .appname small { display: none; }
     .tool-actions { margin-left: 0; width: 100%; }
-    .tool-actions .tbtn { flex: 1; justify-content: center; padding: 0 8px; }
+    .tool-actions .tbtn { flex: 1 1 0; min-width: 0; justify-content: center; padding: 0 6px; gap: 4px; font-size: 13px; overflow: hidden; }
   }
 
   .page { margin: 0 auto; padding: 24px 16px 56px; display: grid; gap: 16px; justify-items: center; }
@@ -158,6 +158,7 @@
   .ptext { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; user-select: text; -webkit-user-select: text; }
   .ptext.open { display: block; -webkit-line-clamp: unset; }
   .ptext:empty::before { content: "Write your post…"; color: var(--muted); }
+  body.preview .ptext-wrap:has(.ptext:empty) { display: none; }
   .ptext .tag { color: var(--accent); font-weight: 600; }
   .more { position: absolute; right: 16px; bottom: 0; padding-left: 28px; color: var(--muted); background: linear-gradient(90deg, transparent, var(--card) 26px); }
   .more:hover { color: var(--accent); text-decoration: underline; }
@@ -297,10 +298,36 @@
   @keyframes fade { from { opacity: 0; } }
   @keyframes up { from { transform: translateY(24px); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+  /* Screenshot preview: one click hides every editing control so the page looks like the real app. */
+  body.preview .edit-only { display: none !important; }
+  body:not(.preview) .native-only { display: none !important; }
+  body.preview [contenteditable] { pointer-events: none; }
+  /* Empty fields: counts and titles show their default (e.g. "0") as real text; empty bio/link lines disappear. */
+  body.preview [contenteditable]:empty::before { color: inherit; font-weight: inherit; }
+  body.preview .hide-empty:empty, body.preview .row-hide-empty:has(.hide-empty:empty) { display: none !important; }
+  body.preview .ph small { display: none; }
+  body.preview [contenteditable]:hover, body.preview [contenteditable]:focus { box-shadow: none; background: none; }
+  .exit-preview {
+    position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; z-index: 80;
+    padding: 8px 14px; border-radius: 18px; background: rgba(0, 0, 0, .78); color: #fff; font-size: 13px; font-weight: 600;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .exit-preview kbd { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, .2); font: inherit; font-size: 11px; }
+  .exit-preview.show { opacity: 1; pointer-events: auto; }
+  body:not(.preview) .exit-preview { display: none; }
+
+  /* Banner buttons only show while the mouse is over the banner (always shown on touch screens). */
+  @media (hover: hover) {
+    .banner-tools { opacity: 0; transition: opacity .15s ease; }
+    .banner:hover .banner-tools, .banner:focus-within .banner-tools { opacity: 1; }
+  }
+  body.preview .sched-badge, body.preview .fold-line, body.preview .mode, body.preview #feedHint,
+  body.preview .feed-head .switch-row, body.preview .recover, body.preview .banner-empty, body.preview .banner-tools { display: none !important; }
 </style>
 </head>
 <body>
-<header class="toolbar">
+<header class="toolbar edit-only">
   <div class="appname">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
     LinkedIn Previewer <small>planning mockup</small>
@@ -314,6 +341,7 @@
     <button data-device="phone" aria-pressed="false">Phone</button>
   </div>
   <div class="tool-actions">
+    <button class="tbtn" data-preview title="Hide editing controls for clean screenshots"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>
     <button class="tbtn primary" data-open-add>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add
     </button>
@@ -346,8 +374,8 @@
       <div class="pinfo">
         <h1 class="pname" id="pName" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Your name"></h1>
         <div class="pheadline" id="pHeadline" contenteditable="plaintext-only" data-placeholder="Headline"></div>
-        <div class="pcompany" id="pCompany" contenteditable="plaintext-only" data-placeholder="Company"></div>
-        <div class="pdetails"><span id="pDetails" contenteditable="plaintext-only" data-placeholder="Location"></span><span class="contact" id="pContact"> · <b>Contact info</b></span></div>
+        <div class="pcompany hide-empty" id="pCompany" contenteditable="plaintext-only" data-placeholder="Company"></div>
+        <div class="pdetails row-hide-empty"><span class="hide-empty" id="pDetails" contenteditable="plaintext-only" data-placeholder="Location"></span><span class="contact" id="pContact"> · <b>Contact info</b></span></div>
         <div class="pstats" id="pStats" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0 followers"></div>
         <div class="pbtns" id="pBtns"></div>
       </div>
@@ -494,6 +522,8 @@
 
 <div class="drop-overlay" id="dropOverlay" hidden>Drop on a post to add to it, or anywhere else to make new posts</div>
 <div class="toast" id="toast" hidden></div>
+<button class="exit-preview" id="exitPreview" type="button">Exit preview<kbd>Esc</kbd></button>
+
 
 <input type="file" id="fileInput" accept="image/*,video/*" multiple hidden>
 <input type="file" id="mediaInput" accept="image/*,video/*" multiple hidden>
@@ -1588,6 +1618,31 @@
   $('backupInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) pickRestore(f); });
   $('restoreCancel').addEventListener('click', () => { pendingRestore = null; $('restoreConfirm').hidden = true; });
   $('restoreGo').addEventListener('click', runRestore);
+
+  // ---------- Screenshot preview ----------
+  // Hides the toolbar, banner buttons, schedule badges, hints and editing outlines. Esc exits; on a
+  // touch screen, tapping shows an "Exit preview" button for a moment, then it fades out again.
+  let previewPillTimer;
+  function showExitPill(ms) {
+    $('exitPreview').classList.add('show');
+    clearTimeout(previewPillTimer);
+    previewPillTimer = setTimeout(() => $('exitPreview').classList.remove('show'), ms);
+  }
+  function setPreview(on) {
+    document.body.classList.toggle('preview', on);
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    if (on) { $('toast').hidden = true; setView('page'); showExitPill(2500); }
+  }
+  document.addEventListener('click', e => { if (e.target.closest('[data-preview]')) setPreview(true); });
+  $('exitPreview').addEventListener('click', () => setPreview(false));
+  // Capture phase, so Esc closes an open dialog first and only exits preview when nothing is open.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.body.classList.contains('preview') && !openModals.length) setPreview(false);
+  }, true);
+  document.addEventListener('mousemove', e => {
+    if (document.body.classList.contains('preview') && e.clientY < 90 && e.clientX > window.innerWidth - 260) showExitPill(1500);
+  });
+  document.addEventListener('touchstart', () => { if (document.body.classList.contains('preview')) showExitPill(2500); }, { passive: true });
 
   // ---------- Boot ----------
   let lastLaunchFailed = false;

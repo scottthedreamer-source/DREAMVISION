@@ -331,6 +331,26 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
+
+  /* Screenshot preview: one click hides every editing control so the page looks like the real app. */
+  body.preview .edit-only { display: none !important; }
+  body:not(.preview) .native-only { display: none !important; }
+  body.preview [contenteditable] { pointer-events: none; }
+  /* Empty fields: counts and titles show their default (e.g. "0") as real text; empty bio/link lines disappear. */
+  body.preview [contenteditable]:empty::before { color: inherit; font-weight: inherit; }
+  body.preview .hide-empty:empty, body.preview .row-hide-empty:has(.hide-empty:empty) { display: none !important; }
+  body.preview .ph small { display: none; }
+  body.preview [contenteditable]:hover, body.preview [contenteditable]:focus { box-shadow: none; background: none; }
+  .exit-preview {
+    position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; z-index: 80;
+    padding: 8px 14px; border-radius: 18px; background: rgba(0, 0, 0, .78); color: #fff; font-size: 13px; font-weight: 600;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .exit-preview kbd { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, .2); font: inherit; font-size: 11px; }
+  .exit-preview.show { opacity: 1; pointer-events: auto; }
+  body:not(.preview) .exit-preview { display: none; }
+  body.preview .tile .when, body.preview .tile .trial, body.preview .tile .reels-only, body.preview .add-tile,
+  body.preview .off-grid-note, body.preview .recover, body.preview .verified[aria-pressed="false"] { display: none !important; }
 </style>
 </head>
 <body>
@@ -340,7 +360,10 @@
       <span id="username" contenteditable="plaintext-only" spellcheck="false" data-placeholder="username"></span>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
     </div>
-    <button class="icon-btn" data-open-backup aria-label="Backup" title="Backup">
+    <button class="icon-btn edit-only" data-preview aria-label="Preview for screenshots" title="Preview: hide editing controls for clean screenshots">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="icon-btn edit-only" data-open-backup aria-label="Backup" title="Backup">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
     </button>
     <button class="icon-btn" data-open-add aria-label="Add">
@@ -355,7 +378,7 @@
       </div>
       <div class="profile-main">
         <div class="name-row">
-          <span class="name" id="displayName" contenteditable="plaintext-only" data-placeholder="Display name"></span>
+          <span class="name hide-empty" id="displayName" contenteditable="plaintext-only" data-placeholder="Display name"></span>
           <button class="verified" id="verifiedBtn" aria-pressed="false" aria-label="Verified badge" title="Tap to toggle the verified badge">
             <svg width="16" height="16"><use href="#i-verified"/></svg>
           </button>
@@ -368,17 +391,19 @@
       </div>
     </div>
     <div class="bio">
-      <div class="category" id="category" contenteditable="plaintext-only" data-placeholder="Category"></div>
-      <div class="text" id="bioText" contenteditable="plaintext-only" data-placeholder="Write a bio…"></div>
-      <div class="link">
+      <div class="category hide-empty" id="category" contenteditable="plaintext-only" data-placeholder="Category"></div>
+      <div class="text hide-empty" id="bioText" contenteditable="plaintext-only" data-placeholder="Write a bio…"></div>
+      <div class="link row-hide-empty">
         <svg width="14" height="14"><use href="#i-link"/></svg>
-        <span id="link" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Add a link"></span>
+        <span class="hide-empty" id="link" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Add a link"></span>
       </div>
     </div>
     <div class="actions">
-      <button class="btn primary" data-open-add>Add</button>
-      <button class="btn" data-open-paste>Paste list</button>
-      <button class="btn" data-goto="schedule">Schedule</button>
+      <button class="btn primary edit-only" data-open-add>Add</button>
+      <button class="btn edit-only" data-open-paste>Paste list</button>
+      <button class="btn edit-only" data-goto="schedule">Schedule</button>
+      <span class="btn primary native-only" aria-hidden="true" style="display:grid;place-items:center">Follow</span>
+      <span class="btn native-only" aria-hidden="true" style="display:grid;place-items:center">Message</span>
     </div>
   </section>
 
@@ -389,7 +414,8 @@
     <button class="tab" role="tab" data-tab="reels" aria-selected="false" aria-label="Reels">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M10 9v6l5-3z"/></svg>
     </button>
-    <button class="tab" role="tab" data-tab="schedule" aria-selected="false" aria-label="Schedule">
+    <span class="tab native-only" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="10" r="3"/><path d="M6.5 19c1-3 3-4 5.5-4s4.5 1 5.5 4"/></svg></span>
+    <button class="tab edit-only" role="tab" data-tab="schedule" aria-selected="false" aria-label="Schedule">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
     </button>
   </nav>
@@ -447,7 +473,8 @@
     <button class="icon-btn" aria-label="Grid" data-goto="grid" data-scroll-top>
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V21h-6v-6H9v6H3z"/></svg>
     </button>
-    <button class="icon-btn" aria-label="Schedule" data-goto="schedule">
+    <span class="icon-btn native-only" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></span>
+    <button class="icon-btn edit-only" aria-label="Schedule" data-goto="schedule">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
     </button>
     <button class="icon-btn" aria-label="Add" data-open-add>
@@ -592,6 +619,8 @@
 
 <div class="drop-overlay" id="dropOverlay" hidden>Drop on a cell to fill it, or anywhere else to add new cells</div>
 <div class="toast" id="toast" hidden></div>
+<button class="exit-preview" id="exitPreview" type="button">Exit preview<kbd>Esc</kbd></button>
+
 
 <input type="file" id="fileInput" accept="image/*,video/*" multiple hidden>
 <input type="file" id="mediaInput" accept="image/*,video/*" multiple hidden>
@@ -1912,6 +1941,31 @@
   $('backupInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) pickRestore(f); });
   $('restoreCancel').addEventListener('click', () => { pendingRestore = null; $('restoreConfirm').hidden = true; });
   $('restoreGo').addEventListener('click', runRestore);
+
+  // ---------- Screenshot preview ----------
+  // Hides the toolbar, banner buttons, schedule badges, hints and editing outlines. Esc exits; on a
+  // touch screen, tapping shows an "Exit preview" button for a moment, then it fades out again.
+  let previewPillTimer;
+  function showExitPill(ms) {
+    $('exitPreview').classList.add('show');
+    clearTimeout(previewPillTimer);
+    previewPillTimer = setTimeout(() => $('exitPreview').classList.remove('show'), ms);
+  }
+  function setPreview(on) {
+    document.body.classList.toggle('preview', on);
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    if (on) { $('toast').hidden = true; if (currentTab === 'schedule') setTab('grid'); showExitPill(2500); }
+  }
+  document.addEventListener('click', e => { if (e.target.closest('[data-preview]')) setPreview(true); });
+  $('exitPreview').addEventListener('click', () => setPreview(false));
+  // Capture phase, so Esc closes an open dialog first and only exits preview when nothing is open.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.body.classList.contains('preview') && !openModals.length) setPreview(false);
+  }, true);
+  document.addEventListener('mousemove', e => {
+    if (document.body.classList.contains('preview') && e.clientY < 90 && e.clientX > window.innerWidth - 260) showExitPill(1500);
+  });
+  document.addEventListener('touchstart', () => { if (document.body.classList.contains('preview')) showExitPill(2500); }, { passive: true });
 
   // ---------- Boot ----------
   // A flag that's still set at the next launch means the last one never finished (e.g. the tab crashed).

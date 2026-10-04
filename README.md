@@ -45,3 +45,7 @@ Everything is saved in the browser you use (IndexedDB), so it survives refreshes
 - Banner buttons (Change banner, Remove, size label) only appear while the mouse is over the banner.
 - Click **Preview** (the eye icon) to hide every editing control: the toolbar, banner buttons, schedule date badges, "+ Add" cards, hints and editing outlines. Empty counts show as "0" and empty bio/link lines disappear, so the page looks like the real app. The Instagram Previewer swaps its planning buttons for Follow / Message.
 - Press **Esc** to leave Preview, or move the mouse to the top-right corner (tap the screen on a phone) to show an "Exit preview" button, which fades away again on its own.
+
+## Snapshots (all three previewers)
+
+Click **Snapshot** (the camera icon) and choose **Image (PNG)** or **PDF**. The whole page is saved exactly as it looks in Preview, with no editing controls. Browsers save to your Downloads folder; to save straight to your Desktop, set your browser to ask where to save each download. The snapshot tools (html2canvas and jsPDF) load from cdnjs the first time you use them.

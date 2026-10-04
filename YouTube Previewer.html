@@ -280,7 +280,7 @@
   .restore-confirm p { margin: 0; }
 
   .drop-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 16%, transparent); border: 3px dashed var(--accent); font-size: 18px; font-weight: 700; color: var(--accent); pointer-events: none; text-align: center; padding: 20px; }
-  .toast { position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 70; background: #0f0f0f; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  .toast { position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 70; background: #0f0f0f; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0,0,0,.3); pointer-events: none; }
   @keyframes fade { from { opacity: 0; } }
   @keyframes up { from { transform: translateY(24px); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
@@ -310,6 +310,7 @@
   }
   body.preview .when, body.preview .add-card, body.preview #sortHint, body.preview .recover,
   body.preview .verified[aria-pressed="false"], body.preview .banner-empty, body.preview .banner-tools { display: none !important; }
+  @media (max-width: 760px) { .tbtn .lbl-wide { display: none; } }
 </style>
 </head>
 <body>
@@ -320,7 +321,8 @@
     <button data-view="schedule" aria-pressed="false">Schedule</button>
   </div>
   <div class="tool-actions">
-    <button class="tbtn" data-preview title="Hide editing controls for clean screenshots"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>
+    <button class="tbtn" data-preview title="Hide editing controls for clean screenshots"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="lbl-wide">Preview</span></button>
+    <button class="tbtn" data-open-snap title="Save the page as an image or PDF"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span class="lbl-wide">Snapshot</span></button>
     <button class="tbtn primary" data-open-add>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add
     </button>
@@ -454,6 +456,21 @@
     <div class="menu-setting switch-row">
       <span><b>Compress videos</b><small>Makes a lighter 720p copy so the previewer stays fast. Your original files aren't changed.</small></span>
       <span class="switch"><input type="checkbox" id="compressToggle" aria-label="Compress videos"><span></span></span>
+    </div>
+  </div>
+</div>
+
+<!-- Snapshot -->
+<div class="backdrop" id="snapModal" hidden>
+  <div class="sheet small" role="dialog" aria-modal="true" aria-label="Snapshot">
+    <div class="sheet-title">Save a snapshot</div>
+    <div class="sheet-body">
+      <div class="hint">Saves the whole page exactly as it looks in Preview, without any editing controls.</div>
+      <div class="btns">
+        <button class="btn primary" data-snap="png">Image (PNG)</button>
+        <button class="btn" data-snap="pdf">PDF</button>
+      </div>
+      <div class="hint">Browsers save to your Downloads folder. To save straight to your Desktop, set your browser to ask where to save each download (Chrome: Settings, Downloads; Safari: Settings, General, File download location).</div>
     </div>
   </div>
 </div>
@@ -884,7 +901,7 @@
   }
   function parseList(text) {
     return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
-      let title = line.replace(/^\d+\s*[.\-\/):\]]*\s*/, '').trim() || line;
+      let title = line.replace(/^\d+\s*[.\-\/):\]]+\s*/, '').trim() || line;
       const isShort = /\bshorts?\b/i.test(title);
       title = title.replace(/^\s*shorts?\s*[:\-–]\s*/i, '').replace(/\s*[-–(]\s*shorts?\s*\)?\s*$/i, '').trim() || title;
       return { title, kind: isShort ? 'short' : 'video' };
@@ -1638,6 +1655,132 @@
     if (document.body.classList.contains('preview') && e.clientY < 90 && e.clientX > window.innerWidth - 260) showExitPill(1500);
   });
   document.addEventListener('touchstart', () => { if (document.body.classList.contains('preview')) showExitPill(2500); }, { passive: true });
+
+  // ---------- Snapshot: the page as it looks in Preview, saved as PNG or PDF ----------
+  // html2canvas and jsPDF load from cdnjs only when a snapshot is taken.
+  const SNAP_LIBS = {
+    html2canvas: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  };
+  const loadedScripts = {};
+  function loadScript(url) {
+    if (!loadedScripts[url]) {
+      loadedScripts[url] = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url;
+        s.onload = resolve;
+        s.onerror = () => { delete loadedScripts[url]; reject(new Error('script_load')); };
+        document.head.appendChild(s);
+      });
+    }
+    return loadedScripts[url];
+  }
+  // html2canvas skips a few things the browser draws: object-fit, <use> icons, video frames and
+  // fixed/sticky bars. Patch the copy it renders so the snapshot matches the screen.
+  function prepareSnapshotClone(doc) {
+    const win = doc.defaultView;
+    doc.querySelectorAll('svg use').forEach(use => {
+      const ref = use.getAttribute('href') || use.getAttribute('xlink:href') || '';
+      const sym = ref.startsWith('#') && doc.getElementById(ref.slice(1));
+      if (!sym) return;
+      const svg = use.closest('svg');
+      if (svg && !svg.getAttribute('viewBox') && sym.getAttribute('viewBox')) svg.setAttribute('viewBox', sym.getAttribute('viewBox'));
+      use.replaceWith(...[...sym.childNodes].map(n => n.cloneNode(true)));
+    });
+    doc.querySelectorAll('video').forEach(v => {
+      const img = doc.createElement('img');
+      if (v.poster) img.src = v.poster;
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000;display:block';
+      v.replaceWith(img);
+    });
+    doc.querySelectorAll('img').forEach(img => {
+      const cs = win.getComputedStyle(img);
+      if (cs.objectFit !== 'cover' && cs.objectFit !== 'contain') return;
+      if (!img.getAttribute('src')) return;
+      const d = doc.createElement('div');
+      Object.assign(d.style, {
+        width: cs.width, height: cs.height, display: cs.display === 'inline' ? 'inline-block' : cs.display,
+        position: cs.position, top: cs.top, left: cs.left, right: cs.right, bottom: cs.bottom,
+        borderRadius: cs.borderRadius, backgroundColor: cs.backgroundColor,
+        backgroundImage: `url("${img.src}")`, backgroundSize: cs.objectFit, backgroundPosition: cs.objectPosition || 'center', backgroundRepeat: 'no-repeat',
+      });
+      img.replaceWith(d);
+    });
+    doc.querySelectorAll('body *').forEach(el => {
+      const pos = win.getComputedStyle(el).position;
+      if (pos === 'sticky') Object.assign(el.style, { position: 'relative', top: 'auto', bottom: 'auto' });
+      else if (pos === 'fixed') Object.assign(el.style, { position: 'absolute', left: '0', right: '0', transform: 'none' });
+    });
+  }
+  async function captureCanvas() {
+    await loadScript(SNAP_LIBS.html2canvas);
+    const target = document.querySelector('.page');
+    const wasPreview = document.body.classList.contains('preview');
+    const scrollY = window.scrollY;
+    document.body.classList.add('preview');
+    $('toast').hidden = true;
+    const hiddenForSnap = [];
+    const hideForSnap = el => { if (el && el.style.display !== 'none') { hiddenForSnap.push([el, el.style.display]); el.style.display = 'none'; } };
+    document.querySelectorAll('.hide-empty').forEach(el => {
+      if (el.textContent.trim()) return;
+      hideForSnap(el.closest('.row-hide-empty') || el);
+    });
+    document.querySelectorAll('.ptext').forEach(el => { if (!el.textContent.trim()) hideForSnap(el.closest('.ptext-wrap')); });
+    window.scrollTo(0, 0);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await Promise.all([...target.querySelectorAll('img')].map(img => (img.decode ? img.decode().catch(() => {}) : null)));
+    try {
+      const w = target.offsetWidth, h = target.scrollHeight;
+      // Stay under ~16 million pixels so phones (Safari's canvas limit) can render long pages.
+      const scale = Math.max(0.5, Math.min(2, Math.sqrt(16e6 / (w * h))));
+      const canvas = await window.html2canvas(target, {
+        scale, useCORS: true, logging: false,
+        backgroundColor: getComputedStyle(document.body).backgroundColor,
+        ignoreElements: el => el.id === 'toast' || el.classList.contains('exit-preview') || el.classList.contains('backdrop') || el.classList.contains('drop-overlay'),
+        onclone: prepareSnapshotClone,
+      });
+      canvas._scale = scale;
+      return canvas;
+    } finally {
+      hiddenForSnap.forEach(([el, display]) => { el.style.display = display; });
+      if (!wasPreview) document.body.classList.remove('preview');
+      window.scrollTo(0, scrollY);
+    }
+  }
+  async function takeSnapshot(kind) {
+    closeModal('snapModal');
+    try {
+      const canvas = await captureCanvas();
+      const base = `${((profile.handle || 'channel').replace(/^@/, '') + '-youtube').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'snapshot'}-${todayISO()}`;
+      if (kind === 'png') {
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        await offerFile(`${base}.png`, blob);
+      } else {
+        await loadScript(SNAP_LIBS.jspdf);
+        const { jsPDF } = window.jspdf;
+        let w = canvas.width / canvas._scale * 0.75, h = canvas.height / canvas._scale * 0.75; // CSS px to points
+        const fit = Math.min(1, 14400 / Math.max(w, h)); // PDF pages max out at 14,400 pt
+        w *= fit; h *= fit;
+        const pdf = new jsPDF({ orientation: w > h ? 'landscape' : 'portrait', unit: 'pt', format: [w, h], compress: true });
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, w, h);
+        await offerFile(`${base}.pdf`, pdf.output('blob'));
+      }
+      toast('Snapshot saved.');
+    } catch (err) {
+      const code = err && err.code;
+      toast(
+        err && err.message === 'script_load' ? "Couldn't load the snapshot tool. Check your internet connection and try again." :
+        code === 'declined' ? 'Snapshot not saved.' :
+        code === 'rate_limited' ? 'A save prompt is already open. Finish that one first.' :
+        code ? "Saving files isn't available in this view. Open it in a browser to save a snapshot." :
+        "Couldn't take the snapshot. Try again, or reload the page first.", 7000);
+    }
+  }
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-open-snap]')) openModal('snapModal');
+    const b = e.target.closest('[data-snap]');
+    if (b) takeSnapshot(b.dataset.snap);
+  });
 
   // ---------- Boot ----------
   // A flag still set at the next launch means the last one never finished (e.g. the tab crashed).

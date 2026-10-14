@@ -1,0 +1,2157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>DreamVision Feed Planner</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #000000;
+    --muted: #737373;
+    --line: #dbdbdb;
+    --chip: #efefef;
+    --chip-hover: #dbdbdb;
+    --sheet: #ffffff;
+    --accent: #0095f6;
+    --link: #00376b;
+    --danger: #ed4956;
+    --badge: rgba(0, 0, 0, 0.62);
+    --backdrop: rgba(0, 0, 0, 0.45);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #000000;
+      --fg: #f5f5f5;
+      --muted: #a8a8a8;
+      --line: #262626;
+      --chip: #262626;
+      --chip-hover: #363636;
+      --sheet: #1a1a1a;
+      --link: #e0f1ff;
+      --backdrop: rgba(0, 0, 0, 0.65);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #000000;
+    --fg: #f5f5f5;
+    --muted: #a8a8a8;
+    --line: #262626;
+    --chip: #262626;
+    --chip-hover: #363636;
+    --sheet: #1a1a1a;
+    --link: #e0f1ff;
+    --backdrop: rgba(0, 0, 0, 0.65);
+    color-scheme: dark;
+  }
+  /* Keep content clear of the notch / home bar; fixed bars add their own inset. */
+  :root { padding-top: env(safe-area-inset-top, 0px); }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  svg { display: block; }
+  [hidden] { display: none !important; }
+
+  .app {
+    max-width: 430px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    position: relative;
+  }
+  @media (min-width: 480px) {
+    .app { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  }
+
+  /* Top bar */
+  .topbar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    display: flex; align-items: center; gap: 8px;
+    height: 48px; padding: 0 16px;
+    background: var(--bg);
+  }
+  .topbar .handle { font-size: 20px; font-weight: 700; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
+  .topbar .handle [contenteditable] { outline: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; }
+  .icon-btn:active { opacity: 0.5; }
+
+  /* Profile header (current Instagram layout: name + stats beside the photo) */
+  .profile { padding: 4px 16px 0; }
+  .profile-top { display: flex; align-items: center; gap: 20px; }
+  .avatar {
+    flex: none; width: 86px; height: 86px; border-radius: 50%; cursor: pointer;
+    background: var(--chip) center/cover no-repeat; border: 1px solid var(--line);
+    display: grid; place-items: center; color: var(--muted);
+  }
+  .profile-main { flex: 1; min-width: 0; display: grid; gap: 8px; }
+  .name-row { min-width: 0; }
+  .name-row .name { font-weight: 600; font-size: 15px; outline: none; overflow-wrap: anywhere; }
+  .verified { display: inline-flex; vertical-align: -2px; margin-left: 4px; color: var(--accent); }
+  .verified[aria-pressed="false"] { opacity: 0.18; }
+  .stats { display: flex; gap: 22px; }
+  .stat b { display: block; font-size: 16px; font-weight: 600; }
+  .stat span { font-size: 13px; }
+  .stat [contenteditable] { outline: none; }
+  .bio { margin-top: 12px; display: grid; gap: 1px; }
+  .bio .category { color: var(--muted); outline: none; }
+  .bio .text { white-space: pre-wrap; outline: none; min-height: 1.35em; }
+  .bio .link { display: flex; align-items: center; gap: 6px; color: var(--link); font-weight: 600; }
+  .bio .link span { outline: none; min-width: 2em; }
+  [contenteditable]:empty::before { content: attr(data-placeholder); color: var(--muted); font-weight: 400; }
+  [contenteditable]:focus { background: var(--chip); border-radius: 4px; }
+  .actions { display: flex; gap: 6px; margin: 14px 0 10px; }
+  .btn {
+    flex: 1; min-height: 32px; border-radius: 8px; background: var(--chip);
+    font-weight: 600; font-size: 14px; padding: 0 10px;
+  }
+  .btn:hover { background: var(--chip-hover); }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(0.95); }
+
+  /* Tabs */
+  .tabs { display: flex; border-top: 1px solid var(--line); position: sticky; top: calc(48px + env(safe-area-inset-top)); z-index: 15; background: var(--bg); }
+  .tab {
+    flex: 1; height: 44px; display: grid; place-items: center; color: var(--muted);
+    border-bottom: 1px solid transparent; margin-bottom: -1px;
+  }
+  .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+
+  /* Grid: Instagram's profile grid is 3:4 */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+  .tile {
+    position: relative; aspect-ratio: 3 / 4; background: var(--chip); overflow: hidden;
+    cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  .reels .tile { aspect-ratio: 9 / 16; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .tile .kind { position: absolute; top: 6px; right: 6px; color: #fff; filter: drop-shadow(0 0 2px rgba(0,0,0,.6)); }
+  .tile .when, .tile .trial {
+    position: absolute; bottom: 4px; padding: 1px 6px; border-radius: 4px;
+    background: var(--badge); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .1px;
+  }
+  .tile .when { left: 4px; }
+  .tile .trial { right: 4px; background: rgba(120, 60, 220, .85); }
+  .tile .when.posted { background: rgba(0, 149, 246, .85); }
+  .tile .busy {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 6px 6px; text-align: center;
+    background: linear-gradient(transparent, rgba(0,0,0,.75)); color: #fff; font-size: 11px; font-weight: 600;
+  }
+  .tile.drop-target { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .ph {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 10px; text-align: center; color: #fff;
+    background: hsl(var(--h, 220) 22% 30%);
+  }
+  .ph span { font-weight: 800; font-size: 12px; line-height: 1.15; text-transform: uppercase; overflow-wrap: anywhere; }
+  .ph small { font-size: 10px; opacity: .75; display: flex; align-items: center; gap: 4px; }
+  .recover { margin: 0 16px 12px; padding: 12px; border-radius: 12px; background: var(--chip); display: grid; gap: 10px; }
+  .recover p { margin: 0; }
+  .off-grid-note { display: block; width: 100%; padding: 12px 16px; text-align: center; }
+  .off-grid-note:hover { color: var(--fg); }
+  .tile .reels-only {
+    position: absolute; top: 6px; left: 6px; padding: 1px 6px; border-radius: 4px;
+    background: var(--badge); color: #fff; font-size: 10px; font-weight: 600;
+  }
+  .tile.add-tile {
+    display: grid; place-items: center; text-align: center; color: var(--muted);
+    background: transparent; outline: 1.5px dashed var(--line); outline-offset: -6px; font-size: 12px; font-weight: 600;
+  }
+  .tile.add-tile:hover { color: var(--fg); }
+
+  /* Drag state (shared by grid + list) */
+  .dragging-src { opacity: 0.25; }
+  .drag-ghost {
+    position: fixed; z-index: 100; pointer-events: none; margin: 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35); transform: scale(1.06); border-radius: 4px; overflow: hidden;
+  }
+  body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+
+  /* Empty state */
+  .empty { padding: 48px 32px; text-align: center; }
+  .empty-icon { width: 64px; height: 64px; margin: 0 auto 14px; border: 2px solid var(--fg); border-radius: 50%; display: grid; place-items: center; }
+  .empty h2 { font-size: 22px; margin: 0 0 6px; font-weight: 800; }
+  .empty p { margin: 0 0 18px; color: var(--muted); }
+  .empty .btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .empty .btn { flex: none; padding: 0 18px; height: 34px; }
+
+  /* Schedule */
+  .sched-settings { padding: 12px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+  .sched-settings .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sched-settings label { color: var(--muted); font-size: 13px; }
+  .field {
+    font: inherit; color: var(--fg); background: var(--chip); border: 0; border-radius: 8px;
+    height: 34px; padding: 0 10px; min-width: 0;
+  }
+  .field.num { width: 56px; text-align: center; }
+  .field.wide { width: 100%; font-weight: 600; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list-group { padding: 14px 16px 6px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .item {
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--bg);
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
+  }
+  .item:hover { background: color-mix(in srgb, var(--chip) 50%, transparent); }
+  .item .thumb { width: 48px; aspect-ratio: 3 / 4; border-radius: 4px; background: var(--chip) center/cover no-repeat; flex: none; position: relative; overflow: hidden; }
+  .item .thumb .ph span { font-size: 7px; }
+  .item .thumb > svg { position: absolute; top: 3px; right: 3px; color: #fff; filter: drop-shadow(0 0 2px rgba(0,0,0,.6)); }
+  .item .meta { flex: 1; min-width: 0; }
+  .item .date { font-weight: 600; }
+  .item .cap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .sub { color: var(--muted); font-size: 12px; }
+  .item .num { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; width: 20px; text-align: right; flex: none; }
+  .item .grip { color: var(--muted); padding: 8px 0 8px 8px; cursor: grab; touch-action: none; }
+
+  /* Bottom nav */
+  .bottomnav {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); z-index: 20;
+    width: 100%; max-width: 430px; height: calc(50px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    display: flex; justify-content: space-around; align-items: center;
+    background: var(--bg); border-top: 1px solid var(--line);
+  }
+  .bottomnav .mini-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--chip) center/cover no-repeat; border: 1px solid var(--line); }
+
+  /* Modals */
+  .backdrop {
+    position: fixed; inset: 0; z-index: 50; background: var(--backdrop);
+    display: flex; align-items: flex-end; justify-content: center;
+    animation: fade .15s ease;
+  }
+  .sheet {
+    width: 100%; max-width: 430px; max-height: 94dvh; overflow: auto; overscroll-behavior: contain;
+    background: var(--sheet); border-radius: 14px 14px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: up .2s ease;
+  }
+  .grabber { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto; }
+  .sheet-body { padding: 12px 16px 16px; display: grid; gap: 12px; }
+  .sheet-title { font-size: 16px; font-weight: 700; text-align: center; padding: 2px 16px 6px; }
+  .menu { display: grid; padding: 0 8px 8px; }
+  .menu button { display: flex; gap: 14px; align-items: center; text-align: left; padding: 12px 10px; border-radius: 10px; }
+  .menu button:hover { background: var(--chip); }
+  .menu b { display: block; font-weight: 600; }
+  .menu small { color: var(--muted); }
+  .backup-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--chip); }
+  .backup-row > div { flex: 1; min-width: 0; }
+  .backup-row b { display: block; font-weight: 600; }
+  .backup-row small { color: var(--muted); }
+  .backup-row .btn { flex: none; min-width: 84px; height: 34px; background: var(--sheet); }
+  .backup-row .btn.primary { background: var(--accent); }
+  .restore-confirm { padding: 12px; border-radius: 12px; border: 1px solid var(--danger); display: grid; gap: 10px; }
+  .restore-confirm p { margin: 0; }
+  .menu-setting { gap: 16px; margin: 0 8px 12px; padding: 12px 10px 4px; border-top: 1px solid var(--line); }
+  .menu-setting b { display: block; font-weight: 600; }
+  .menu-setting small { color: var(--muted); }
+  .menu .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; flex: none; }
+
+  /* Post viewer: swipeable slides */
+  .viewer { position: relative; background: #000; }
+  .slides { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .slides::-webkit-scrollbar { display: none; }
+  .slide { flex: 0 0 100%; scroll-snap-align: center; position: relative; display: flex; align-items: center; justify-content: center; height: min(52dvh, 560px); overflow: hidden; }
+  .slide img, .slide video { max-width: 100%; max-height: min(52dvh, 560px); display: block; object-fit: contain; }
+  .slide .rm {
+    position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center;
+  }
+  .slide-empty { flex: 0 0 100%; height: 34dvh; display: grid; place-items: center; text-align: center; color: #fff; padding: 20px; }
+  .slide-empty .btn { color: #fff; background: rgba(255,255,255,.16); height: 36px; padding: 0 16px; }
+  .slide-empty p { margin: 0 0 12px; opacity: .8; }
+  .slide .slide-empty { height: 100%; font-size: 13px; }
+  .slide .slide-empty p { opacity: .9; }
+  .slide-count {
+    position: absolute; top: 10px; left: 10px; padding: 2px 8px; border-radius: 10px;
+    background: rgba(0,0,0,.55); color: #fff; font-size: 12px; font-weight: 600; pointer-events: none;
+  }
+  .dots { display: flex; justify-content: center; gap: 4px; padding: 8px 0 0; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+  .dots i.on { background: var(--accent); }
+  .sheet-when { font-weight: 600; }
+  .sheet-when small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .seg { display: flex; background: var(--chip); border-radius: 9px; padding: 2px; }
+  .seg button { flex: 1; height: 30px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .seg button[aria-pressed="true"] { background: var(--sheet); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .sheet textarea {
+    font: inherit; color: var(--fg); background: var(--chip); border: 0; border-radius: 8px;
+    padding: 10px; min-height: 70px; resize: vertical; width: 100%;
+  }
+  .switch-row { display: flex; align-items: center; justify-content: space-between; }
+  .switch { position: relative; width: 44px; height: 26px; flex: none; }
+  .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; z-index: 1; }
+  .switch span { position: absolute; inset: 0; border-radius: 13px; background: var(--line); transition: background .15s; pointer-events: none; }
+  .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(18px); }
+  .sheet-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sheet-btns .btn { flex: 1 1 120px; height: 34px; }
+  .btn.danger { color: var(--danger); background: transparent; }
+  .btn.danger:hover { background: var(--chip); }
+  .btn.danger.armed { background: var(--danger); color: #fff; }
+  .slide .rm.armed { width: auto; padding: 0 12px; border-radius: 15px; background: var(--danger); font-size: 13px; font-weight: 600; }
+
+  /* Cover picker */
+  .cover { display: grid; grid-template-columns: 78px 1fr; gap: 12px; align-items: center; padding: 12px; border-radius: 12px; background: var(--chip); }
+  .cover-preview { width: 78px; aspect-ratio: 3 / 4; border-radius: 4px; overflow: hidden; background: #000; position: relative; }
+  .cover-preview img, .cover-preview canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cover-preview .ph span { font-size: 8px; }
+  .cover h3 { margin: 0 0 2px; font-size: 14px; }
+  .cover .hint { margin-bottom: 8px; }
+  .cover input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0 0 8px; }
+  .cover .sheet-btns .btn { flex: 1 1 90px; background: var(--sheet); font-size: 13px; }
+  .cover .sheet-btns .btn:hover { background: var(--chip-hover); }
+  .cover .btn.primary { background: var(--accent); }
+
+  /* Drop overlay + toast */
+  .drop-overlay {
+    position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    border: 3px dashed var(--accent); font-size: 18px; font-weight: 700; color: var(--accent);
+    pointer-events: none; text-align: center; padding: 20px;
+  }
+  .toast {
+    position: fixed; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%);
+    z-index: 70; background: #262626; color: #fff; padding: 10px 14px; border-radius: 8px;
+    font-size: 13px; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0,0,0,.3); pointer-events: none; }
+
+  @keyframes fade { from { opacity: 0; } }
+  @keyframes up { from { transform: translateY(40px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  /* Screenshot preview: one click hides every editing control so the page looks like the real app. */
+  body.preview .edit-only { display: none !important; }
+  body:not(.preview) .native-only { display: none !important; }
+  body.preview [contenteditable] { pointer-events: none; }
+  /* Empty fields: counts and titles show their default (e.g. "0") as real text; empty bio/link lines disappear. */
+  body.preview [contenteditable]:empty::before { color: inherit; font-weight: inherit; }
+  body.preview .hide-empty:empty, body.preview .row-hide-empty:has(.hide-empty:empty) { display: none !important; }
+  body.preview .ph small { display: none; }
+  body.preview [contenteditable]:hover, body.preview [contenteditable]:focus { box-shadow: none; background: none; }
+  .exit-preview {
+    position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; z-index: 80;
+    padding: 8px 14px; border-radius: 18px; background: rgba(0, 0, 0, .78); color: #fff; font-size: 13px; font-weight: 600;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .exit-preview kbd { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, .2); font: inherit; font-size: 11px; }
+  .exit-preview.show { opacity: 1; pointer-events: auto; }
+  body:not(.preview) .exit-preview { display: none; }
+  body.preview .tile .when, body.preview .tile .trial, body.preview .tile .reels-only, body.preview .add-tile,
+  body.preview .off-grid-note, body.preview .recover, body.preview .verified[aria-pressed="false"] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="handle">
+      <span id="username" contenteditable="plaintext-only" spellcheck="false" data-placeholder="username"></span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+    <button class="icon-btn edit-only" data-open-snap aria-label="Snapshot" title="Snapshot: save the page as an image or PDF">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+    </button>
+    <button class="icon-btn edit-only" data-preview aria-label="Preview for screenshots" title="Preview: hide editing controls for clean screenshots">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="icon-btn edit-only" data-open-backup aria-label="Backup" title="Backup">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+    </button>
+    <button class="icon-btn" data-open-add aria-label="Add">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+    </button>
+  </header>
+
+  <section class="profile">
+    <div class="profile-top">
+      <div class="avatar" id="avatar" title="Change profile photo">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+      </div>
+      <div class="profile-main">
+        <div class="name-row">
+          <span class="name hide-empty" id="displayName" contenteditable="plaintext-only" data-placeholder="Display name"></span>
+          <button class="verified" id="verifiedBtn" aria-pressed="false" aria-label="Verified badge" title="Tap to toggle the verified badge">
+            <svg width="16" height="16"><use href="#i-verified"/></svg>
+          </button>
+        </div>
+        <div class="stats">
+          <div class="stat"><b id="postCount">0</b><span>posts</span></div>
+          <div class="stat"><b id="followers" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0"></b><span>followers</span></div>
+          <div class="stat"><b id="following" contenteditable="plaintext-only" spellcheck="false" data-placeholder="0"></b><span>following</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="bio">
+      <div class="category hide-empty" id="category" contenteditable="plaintext-only" data-placeholder="Category"></div>
+      <div class="text hide-empty" id="bioText" contenteditable="plaintext-only" data-placeholder="Write a bio…"></div>
+      <div class="link row-hide-empty">
+        <svg width="14" height="14"><use href="#i-link"/></svg>
+        <span class="hide-empty" id="link" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Add a link"></span>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn primary edit-only" data-open-add>Add</button>
+      <button class="btn edit-only" data-open-paste>Paste list</button>
+      <button class="btn edit-only" data-goto="schedule">Schedule</button>
+      <span class="btn primary native-only" aria-hidden="true" style="display:grid;place-items:center">Follow</span>
+      <span class="btn native-only" aria-hidden="true" style="display:grid;place-items:center">Message</span>
+    </div>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="grid" aria-selected="true" aria-label="Grid">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+    </button>
+    <button class="tab" role="tab" data-tab="reels" aria-selected="false" aria-label="Reels">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M10 9v6l5-3z"/></svg>
+    </button>
+    <span class="tab native-only" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="10" r="3"/><path d="M6.5 19c1-3 3-4 5.5-4s4.5 1 5.5 4"/></svg></span>
+    <button class="tab edit-only" role="tab" data-tab="schedule" aria-selected="false" aria-label="Schedule">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    </button>
+  </nav>
+
+  <main>
+    <section id="gridView">
+      <div class="recover" id="recover" hidden>
+        <p><b>The planner closed unexpectedly last time.</b> Very large videos can do this, especially on phones. Smaller H.264 exports work best.</p>
+        <div class="sheet-btns">
+          <button class="btn" id="recoverOk">OK</button>
+          <button class="btn danger" id="recoverClear">Clear all planner data</button>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+      <button class="hint off-grid-note" id="offGridNote" data-goto="reels" hidden></button>
+      <div class="empty" id="empty" hidden>
+        <div class="empty-icon">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </div>
+        <h2>Plan your feed</h2>
+        <p>Add videos and photos, or paste your numbered post list to get a cell for each one. Then drag cells around until the grid looks right.</p>
+        <div class="btns">
+          <button class="btn primary" data-pick="each">Add videos &amp; photos</button>
+          <button class="btn" data-open-paste>Paste a list</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="reelsView" hidden>
+      <div class="grid reels" id="reelsGrid"></div>
+      <div class="empty" id="reelsEmpty" hidden><p>Reels and trial reels show here at full 9:16, the way the Reels tab crops them.</p></div>
+    </section>
+
+    <section id="scheduleView" hidden>
+      <div class="sched-settings">
+        <div class="row">
+          <label for="startDate">Start</label>
+          <input class="field" type="date" id="startDate">
+          <label for="postTime">at</label>
+          <input class="field" type="time" id="postTime">
+        </div>
+        <div class="row">
+          <label for="everyDays">Post every</label>
+          <input class="field num" type="number" id="everyDays" min="1" max="60" step="1">
+          <label for="everyDays">day(s)</label>
+        </div>
+        <div class="hint">The bottom of your grid posts first. Drag here or in the grid to reshuffle; dates follow the order.</div>
+      </div>
+      <ul class="list" id="schedList"></ul>
+      <div class="empty" id="schedEmpty" hidden><p>Nothing scheduled yet. Add posts and they'll show up here in posting order.</p></div>
+    </section>
+  </main>
+
+  <nav class="bottomnav" aria-label="App">
+    <button class="icon-btn" aria-label="Grid" data-goto="grid" data-scroll-top>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V21h-6v-6H9v6H3z"/></svg>
+    </button>
+    <span class="icon-btn native-only" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></span>
+    <button class="icon-btn edit-only" aria-label="Schedule" data-goto="schedule">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    </button>
+    <button class="icon-btn" aria-label="Add" data-open-add>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+    </button>
+    <button class="icon-btn" aria-label="Reels" data-goto="reels">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 8h18M8 3l3 5M14 3l3 5M10 12v6l5-3z"/></svg>
+    </button>
+    <button class="icon-btn" aria-label="Profile" data-goto="grid" data-scroll-top>
+      <span class="mini-avatar" id="miniAvatar"></span>
+    </button>
+  </nav>
+</div>
+
+<!-- Add menu -->
+<div class="backdrop" id="addMenu" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Add">
+    <div class="grabber"></div>
+    <div class="sheet-title">Add to your grid</div>
+    <div class="menu">
+      <button data-pick="each">
+        <span class="ico"><svg width="20" height="20"><use href="#i-reel"/></svg></span>
+        <span><b>Videos &amp; photos</b><small>Each file gets its own cell</small></span>
+      </button>
+      <button data-pick="carousel">
+        <span class="ico"><svg width="20" height="20"><use href="#i-carousel"/></svg></span>
+        <span><b>Carousel</b><small>Pick several files for one swipeable post</small></span>
+      </button>
+      <button data-add-placeholder>
+        <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"><rect x="4" y="3" width="16" height="18" rx="2"/></svg></span>
+        <span><b>Empty cell</b><small>A titled spot for content you haven't shot yet</small></span>
+      </button>
+      <button data-open-paste>
+        <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></span>
+        <span><b>Paste a list</b><small>Turn your numbered post list into cells</small></span>
+      </button>
+    </div>
+    <div class="menu-setting switch-row">
+      <span><b>Compress videos</b><small>Makes a lighter 720p copy so the planner stays fast. Your original files aren't changed.</small></span>
+      <span class="switch"><input type="checkbox" id="compressToggle" aria-label="Compress videos"><span></span></span>
+    </div>
+  </div>
+</div>
+
+<!-- Backup -->
+<div class="backdrop" id="backupModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Backup">
+    <div class="grabber"></div>
+    <div class="sheet-title">Backup</div>
+    <div class="sheet-body">
+      <div class="hint">Your plan is saved in this browser only. A backup file holds everything (posts, videos, thumbnails, profile and schedule) so you can keep it safe or open it on another computer.</div>
+      <div class="backup-row">
+        <div><b>Save backup file</b><small id="lastBackup">No backup saved yet.</small></div>
+        <button class="btn primary" id="backupSave">Save</button>
+      </div>
+      <div class="backup-row">
+        <div><b>Restore from backup</b><small>Replaces what's in the planner now with the backup.</small></div>
+        <button class="btn" id="backupLoad">Restore</button>
+      </div>
+      <div class="restore-confirm" id="restoreConfirm" hidden>
+        <p id="restoreText"></p>
+        <div class="sheet-btns">
+          <button class="btn" id="restoreCancel">Cancel</button>
+          <button class="btn danger armed" id="restoreGo">Replace my plan</button>
+        </div>
+      </div>
+      <div class="hint" id="backupStatus" hidden></div>
+    </div>
+  </div>
+</div>
+
+<!-- Snapshot -->
+<div class="backdrop" id="snapModal" hidden>
+  <div class="sheet small" role="dialog" aria-modal="true" aria-label="Snapshot">
+    <div class="sheet-title">Save a snapshot</div>
+    <div class="sheet-body">
+      <div class="hint">Saves the whole page exactly as it looks in Preview, without any editing controls.</div>
+      <div class="sheet-btns">
+        <button class="btn primary" data-snap="png">Image (PNG)</button>
+        <button class="btn" data-snap="pdf">PDF</button>
+      </div>
+      <div class="hint">Browsers save to your Downloads folder. To save straight to your Desktop, set your browser to ask where to save each download (Chrome: Settings, Downloads; Safari: Settings, General, File download location).</div>
+    </div>
+  </div>
+</div>
+
+<!-- Paste list -->
+<div class="backdrop" id="pasteModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Paste a list">
+    <div class="grabber"></div>
+    <div class="sheet-title">Paste your post list</div>
+    <div class="sheet-body">
+      <div class="hint">One post per line. Line 1 becomes the top-left cell, like reading the grid. Words like carousel, trial or post set the type; anything else becomes a reel.</div>
+      <textarea id="pasteText" rows="9" placeholder="1. THE NEW WAY TO INTERVIEW - CAROUSEL&#10;2. FLASHY FOOTAGE - TRIAL REEL&#10;3. TALKING SCOTT A&#10;…"></textarea>
+      <div class="sheet-btns">
+        <button class="btn" data-close>Cancel</button>
+        <button class="btn primary" id="pasteCreate">Create cells</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Post viewer / editor -->
+<div class="backdrop" id="sheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Post details">
+    <div class="grabber"></div>
+    <div class="viewer">
+      <div class="slides" id="slides"></div>
+      <span class="slide-count" id="slideCount" hidden></span>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="sheet-body">
+      <div class="sheet-when" id="sheetWhen"></div>
+      <input class="field wide" id="sheetTitle" placeholder="Working title, e.g. TALKING SCOTT A" autocomplete="off">
+      <div class="seg" id="sheetKind" role="group" aria-label="Post type">
+        <button data-kind="post">Post</button>
+        <button data-kind="carousel">Carousel</button>
+        <button data-kind="reel">Reel</button>
+        <button data-kind="trial">Trial reel</button>
+      </div>
+      <div class="hint" id="kindHint"></div>
+      <div class="switch-row" id="gridRow">
+        <span>Show on profile grid<small class="hint" id="gridHint" style="display:block"></small></span>
+        <label class="switch"><input type="checkbox" id="sheetOnGrid"><span></span></label>
+      </div>
+
+      <div class="cover" id="coverBox">
+        <div class="cover-preview" id="coverPreview"></div>
+        <div>
+          <h3>Grid thumbnail</h3>
+          <div class="hint" id="coverHint"></div>
+          <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Scrub to pick a frame">
+          <div class="sheet-btns">
+            <button class="btn primary" id="frameBtn">Use this frame</button>
+            <button class="btn" id="thumbBtn">Upload image</button>
+            <button class="btn" id="resetThumbBtn">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <textarea id="sheetCaption" placeholder="Caption or notes…"></textarea>
+      <div class="switch-row">
+        <span>Already posted</span>
+        <label class="switch"><input type="checkbox" id="sheetPosted"><span></span></label>
+      </div>
+      <div class="sheet-btns">
+        <button class="btn" id="addMediaBtn">Add video or photo</button>
+      </div>
+      <div class="hint" id="sheetBusy" hidden></div>
+      <div class="sheet-btns">
+        <button class="btn danger" id="deleteBtn">Delete cell</button>
+        <button class="btn" data-close>Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="drop-overlay" id="dropOverlay" hidden>Drop on a cell to fill it, or anywhere else to add new cells</div>
+<div class="toast" id="toast" hidden></div>
+<button class="exit-preview" id="exitPreview" type="button">Exit preview<kbd>Esc</kbd></button>
+
+
+<input type="file" id="fileInput" accept="image/*,video/*" multiple hidden>
+<input type="file" id="mediaInput" accept="image/*,video/*" multiple hidden>
+<input type="file" id="avatarInput" accept="image/*" hidden>
+<input type="file" id="thumbInput" accept="image/*" hidden>
+<input type="file" id="backupInput" accept=".zip,application/zip" hidden>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-reel" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm5 6v7l6-3.5z"/></symbol>
+  <symbol id="i-carousel" viewBox="0 0 24 24"><path fill="currentColor" d="M8 2h12a2 2 0 012 2v12a2 2 0 01-2 2h-1V6a1 1 0 00-1-1H6V4a2 2 0 012-2zM4 6h12a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 8h14M5 12h14M5 16h14"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></symbol>
+  <symbol id="i-verified" viewBox="0 0 24 24"><path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.2 1 3.1 2.7 1.8-1 3.1 1 3.1-2.7 1.8-1 3.1-3.2-.2L12 22.5l-2.6-1.9-3.2.2-1-3.1-2.7-1.8 1-3.1-1-3.1 2.7-1.8 1-3.1 3.2.2z"/><path fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M8 12.2l2.7 2.6L16.2 9"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></symbol>
+</svg>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Storage (IndexedDB: media blobs + small settings) ----------
+  const store = (() => {
+    let dbPromise = null;
+    function open() {
+      if (!dbPromise) {
+        dbPromise = new Promise((resolve, reject) => {
+          const req = indexedDB.open('feed-planner', 2);
+          req.onupgradeneeded = e => {
+            const db = req.result;
+            if (e.oldVersion < 1) {
+              db.createObjectStore('posts', { keyPath: 'id' });
+              db.createObjectStore('kv');
+            }
+            if (e.oldVersion < 2) {
+              // Videos live in their own store so editing a title never rewrites (or reloads) a video.
+              const media = db.createObjectStore('media');
+              if (e.oldVersion >= 1) {
+                req.transaction.objectStore('posts').openCursor().onsuccess = ev => {
+                  const cur = ev.target.result;
+                  if (!cur) return;
+                  const p = cur.value;
+                  const blobs = Array.isArray(p.slides) ? p.slides : p.media ? [p.media] : [];
+                  p.slides = blobs.map(b => {
+                    if (!(b instanceof Blob)) return b;
+                    const id = uid();
+                    media.put(b, id);
+                    return { id, type: b.type, name: b.name || '' };
+                  });
+                  if (!p.kind) p.kind = p.type === 'video' ? 'reel' : p.slides.length > 1 ? 'carousel' : 'post';
+                  delete p.media; delete p.type;
+                  cur.update(p);
+                  cur.continue();
+                };
+              }
+            }
+          };
+          req.onsuccess = () => {
+            // Let a newer version (e.g. the planner updated in another tab) take over instead of blocking it.
+            req.result.onversionchange = () => req.result.close();
+            resolve(req.result);
+          };
+          req.onerror = () => reject(req.error);
+          req.onblocked = () => toast('Close the planner in your other tabs to finish updating it.', 8000);
+        });
+      }
+      return dbPromise;
+    }
+    async function run(name, mode, fn) {
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(name, mode);
+        const req = fn(tx.objectStore(name));
+        tx.oncomplete = () => resolve(req ? req.result : undefined);
+        tx.onerror = tx.onabort = () => reject(tx.error);
+      });
+    }
+    return {
+      allPosts: () => run('posts', 'readonly', s => s.getAll()),
+      putPost: p => run('posts', 'readwrite', s => s.put(p)),
+      deletePost: id => run('posts', 'readwrite', s => s.delete(id)),
+      getMedia: id => run('media', 'readonly', s => s.get(id)),
+      putMedia: (id, blob) => run('media', 'readwrite', s => s.put(blob, id)),
+      deleteMedia: id => run('media', 'readwrite', s => s.delete(id)),
+      get: k => run('kv', 'readonly', s => s.get(k)),
+      set: (k, v) => run('kv', 'readwrite', s => s.put(v, k)),
+      // Restore: wipe everything and write the backup in one transaction, so it's all-or-nothing.
+      async replaceAll({ posts, media, kv }) {
+        const db = await open();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(['posts', 'media', 'kv'], 'readwrite');
+          const [ps, ms, ks] = ['posts', 'media', 'kv'].map(n => tx.objectStore(n));
+          ps.clear(); ms.clear(); ks.clear();
+          posts.forEach(p => ps.put(p));
+          media.forEach(([id, blob]) => ms.put(blob, id));
+          kv.forEach(([k, v]) => ks.put(v, k));
+          tx.oncomplete = () => resolve();
+          tx.onerror = tx.onabort = () => reject(tx.error);
+        });
+      },
+    };
+  })();
+
+  let saveWarned = false;
+  function persist(promise) {
+    promise.catch(() => {
+      if (!saveWarned) { saveWarned = true; toast("Couldn't save in this browser. Changes will be lost on refresh."); }
+    });
+  }
+
+  // ---------- State ----------
+  const KINDS = { post: 'Post', carousel: 'Carousel', reel: 'Reel', trial: 'Trial reel' };
+  const KIND_HINTS = {
+    post: '',
+    carousel: 'Swipe through the slides above. The grid shows the thumbnail below.',
+    reel: 'The grid crops reels to 3:4; the Reels tab shows the full 9:16.',
+    trial: 'On Instagram, trial reels go to non-followers first and only land on your grid if you share them there. Use the switch below to preview either way.',
+  };
+  const posts = new Map();     // id -> { id, kind, title, slides: [{ id, type, name }], thumb, customThumb, caption, posted, onGrid, created }
+  const mediaCache = new Map(); // media id -> Blob, loaded only when a cell is opened
+  let order = [];              // grid order, index 0 = top-left (newest)
+  let profile = { username: 'yourbrand', name: '', verified: false, category: '', bio: '', link: '', followers: '', following: '' };
+  let schedule = { start: todayISO(), time: '18:00', every: 1 };
+  let avatarBlob = null;
+  let settings = { compress: true };
+  const urls = new Map();      // blob -> object URL cache
+  let openId = null;
+  let currentTab = 'grid';
+
+  function todayISO() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  function urlFor(blob) {
+    if (!blob) return '';
+    let u = urls.get(blob);
+    if (!u) { u = URL.createObjectURL(blob); urls.set(blob, u); }
+    return u;
+  }
+  function dropUrl(blob) {
+    const u = urls.get(blob);
+    if (u) { URL.revokeObjectURL(u); urls.delete(blob); }
+  }
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const isVideo = blob => !!blob && /^video\//.test(blob.type);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function hue(id) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+
+  // Fill in fields that older saves don't have. (Files were moved out of posts by the v2 upgrade.)
+  function normalize(p) {
+    let changed = false;
+    if (!Array.isArray(p.slides)) { p.slides = []; changed = true; }
+    if (!p.kind) { p.kind = p.slides.length > 1 ? 'carousel' : isVideo(p.slides[0]) ? 'reel' : 'post'; changed = true; }
+    p.title = p.title || '';
+    p.caption = p.caption || '';
+    p.posted = !!p.posted;
+    p.customThumb = !!p.customThumb;
+    if (typeof p.onGrid !== 'boolean') { p.onGrid = true; changed = true; }
+    return changed;
+  }
+
+  // ---------- Schedule math ----------
+  // Unposted posts go out bottom-of-grid first. Slot i = start + i * every days.
+  function queue() {
+    return order.filter(id => !posts.get(id).posted).reverse();
+  }
+  function scheduleDates() {
+    const map = new Map();
+    const [y, m, d] = (schedule.start || todayISO()).split('-').map(Number);
+    const [hh, mm] = (schedule.time || '18:00').split(':').map(Number);
+    const every = Math.max(1, Number(schedule.every) || 1);
+    queue().forEach((id, i) => map.set(id, new Date(y, m - 1, d + i * every, hh, mm)));
+    return map;
+  }
+  const fmtShort = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+  const fmtLong = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const fmtTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+
+  // ---------- Thumbnails ----------
+  function canvasToBlob(canvas) {
+    return new Promise(res => canvas.toBlob(b => res(b), 'image/jpeg', 0.85));
+  }
+  function drawScaled(source, w, h, max = 720) {
+    const scale = Math.min(1, max / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+    return canvasToBlob(c);
+  }
+  async function imageThumb(blob) {
+    try {
+      const bmp = await createImageBitmap(blob);
+      const out = await drawScaled(bmp, bmp.width, bmp.height);
+      bmp.close && bmp.close();
+      return out || blob;
+    } catch { return blob; } // e.g. HEIC the browser can't decode: show original
+  }
+  function videoThumb(blob, atTime) {
+    return new Promise(resolve => {
+      const v = document.createElement('video');
+      const src = URL.createObjectURL(blob);
+      let done = false;
+      const finish = out => { if (done) return; done = true; URL.revokeObjectURL(src); v.removeAttribute('src'); v.load(); resolve(out); };
+      setTimeout(() => finish(null), 8000);
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      v.onloadeddata = () => {
+        const t = atTime != null ? atTime : Math.min(0.5, (v.duration || 1) / 2);
+        if (Math.abs(v.currentTime - t) < 0.01) v.onseeked(); else v.currentTime = t;
+      };
+      v.onseeked = async () => finish(await drawScaled(v, v.videoWidth, v.videoHeight));
+      v.onerror = () => finish(null);
+      v.src = src;
+    });
+  }
+  const mediaThumb = blob => (isVideo(blob) ? videoThumb(blob) : imageThumb(blob));
+
+  // Each slide is { id, type, name }; the file itself is saved once and loaded on demand.
+  function storeMedia(file) {
+    const id = uid();
+    mediaCache.set(id, file);
+    persist(store.putMedia(id, file));
+    return { id, type: file.type, name: file.name || '' };
+  }
+  async function loadMedia(slide) {
+    if (!mediaCache.has(slide.id)) {
+      const blob = await store.getMedia(slide.id).catch(() => null);
+      if (blob) mediaCache.set(slide.id, blob);
+    }
+    return mediaCache.get(slide.id) || null;
+  }
+  function forgetMedia(slide) {
+    const blob = mediaCache.get(slide.id);
+    if (blob) dropUrl(blob);
+    mediaCache.delete(slide.id);
+    persist(store.deleteMedia(slide.id));
+  }
+
+  async function autoThumb(p) {
+    if (p.customThumb && p.thumb) return;
+    p.customThumb = false;
+    const first = p.slides[0] ? await loadMedia(p.slides[0]) : null;
+    p.thumb = first ? await mediaThumb(first) : null;
+  }
+
+  // ---------- Creating posts ----------
+  function newPost(fields) {
+    return { id: uid(), kind: 'post', title: '', slides: [], thumb: null, customThumb: false, caption: '', posted: false, onGrid: true, created: Date.now(), ...fields };
+  }
+  function insertAtTop(ids) {
+    order = ids.concat(order);
+    saveOrder();
+  }
+  const isReel = p => p.kind === 'reel' || p.kind === 'trial';
+  // Reels can be kept off the profile grid (Reels tab only), like Instagram's "Show on profile grid".
+  const onGrid = p => !isReel(p) || p.onGrid !== false;
+  const kindFor = files => (files.length > 1 ? 'carousel' : isVideo(files[0]) ? 'reel' : 'post');
+  // Some browsers/OSes hand over .mov and friends with no MIME type, so fall back to the extension.
+  const EXT_TYPES = {
+    mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', qt: 'video/quicktime', webm: 'video/webm',
+    mkv: 'video/x-matroska', avi: 'video/x-msvideo', mts: 'video/mp2t', m2ts: 'video/mp2t', '3gp': 'video/3gpp',
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+    heic: 'image/heic', heif: 'image/heif', avif: 'image/avif', tif: 'image/tiff', tiff: 'image/tiff',
+  };
+  const extOf = f => ((f && f.name) || '').split('.').pop().toLowerCase();
+  function asMedia(f) {
+    if (/^(image|video)\//.test(f.type)) return f;
+    const type = EXT_TYPES[extOf(f)];
+    return type ? new File([f], f.name, { type, lastModified: f.lastModified }) : null;
+  }
+  const mediaOnly = list => [...list].map(asMedia).filter(Boolean);
+  const cantPreview = p => !p.thumb && isVideo(p.slides[0]);
+  function warnUnplayable(names) {
+    if (!names.length) return;
+    toast(`Added, but this browser can't play ${names.length === 1 ? `“${names[0]}”` : `${names.length} of these videos`}. ` +
+      'ProRes and some iPhone (HEVC) videos only play in Safari. Open the planner in Safari, or export an H.264 MP4. ' +
+      'You can still set a cover with “Upload image”.', 12000);
+  }
+
+  // ---------- Video compression (runs in the browser with WebCodecs, via Mediabunny) ----------
+  // Big camera files make the planner slow and can crash phones, so videos get a lighter 720p copy.
+  // H.264 MP4 where the browser can encode it (Chrome, Safari, Edge); WebM otherwise.
+  const MEDIABUNNY_URL = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.0/dist/bundles/mediabunny.min.mjs';
+  const MAX_SIDE = 1280;
+  const VIDEO_BITRATE = 2_500_000;
+  const SKIP_BELOW = 12 * 1024 * 1024; // small H.264 files are already light enough
+  let mediabunny = null;
+  const loadMediabunny = () => (mediabunny ||= import(MEDIABUNNY_URL).catch(err => { mediabunny = null; throw err; }));
+  const warned = new Set();
+  const warnOnce = (key, msg) => { if (!warned.has(key)) { warned.add(key); toast(msg, 8000); } };
+
+  // Returns the compressed file, or the original when it's already small, can't be decoded here,
+  // or compressing wouldn't make it smaller.
+  async function compressVideo(file, onProgress) {
+    if (!settings.compress || typeof VideoEncoder === 'undefined') return file;
+    let M, input;
+    try { M = await loadMediabunny(); } catch {
+      warnOnce('compressor', "Couldn't load the video compressor, so this video is kept at full size.");
+      return file;
+    }
+    try {
+      input = new M.Input({ formats: M.ALL_FORMATS, source: new M.BlobSource(file) });
+      const track = await input.getPrimaryVideoTrack();
+      if (!track) return file;
+      if (track.codec === 'avc' && file.size < SKIP_BELOW) return file;
+      if (!(await track.canDecode())) return file;
+      const useAvc = await M.canEncodeVideo('avc');
+      const codec = useAvc ? 'avc' : (await M.canEncodeVideo('vp9')) ? 'vp9' : null;
+      if (!codec) return file;
+      const [canAac, canOpus] = await Promise.all([M.canEncodeAudio('aac'), M.canEncodeAudio('opus')]);
+      const scale = Math.min(1, MAX_SIDE / Math.max(track.displayWidth, track.displayHeight));
+      const even = n => Math.max(2, Math.round(n / 2) * 2);
+      const output = new M.Output({
+        format: useAvc ? new M.Mp4OutputFormat({ fastStart: 'in-memory' }) : new M.WebMOutputFormat(),
+        target: new M.BufferTarget(),
+      });
+      const conversion = await M.Conversion.init({
+        input, output, tracks: 'primary',
+        video: {
+          width: even(track.displayWidth * scale), height: even(track.displayHeight * scale), fit: 'contain',
+          codec, bitrate: VIDEO_BITRATE, forceTranscode: true,
+        },
+        audio: t => (useAvc && t.codec === 'aac') ? {}
+          : useAvc && canAac ? { codec: 'aac', bitrate: 128000 }
+          : canOpus ? { codec: 'opus', bitrate: 96000 }
+          : { discard: true },
+      });
+      if (!conversion.isValid) return file;
+      conversion.onProgress = pr => onProgress(pr);
+      await conversion.execute();
+      const buf = output.target.buffer;
+      if (!buf || buf.byteLength >= file.size) return file;
+      const base = (file.name || 'video').replace(/\.[^.]+$/, '');
+      return new File([buf], `${base}.${useAvc ? 'mp4' : 'webm'}`, { type: useAvc ? 'video/mp4' : 'video/webm', lastModified: file.lastModified });
+    } catch (err) {
+      console.warn('Video compression failed; keeping the original file.', err);
+      return file;
+    } finally {
+      try { input && input.dispose(); } catch {}
+    }
+  }
+
+  // Cells that are still being prepared show a progress label.
+  const busy = new Map(); // post id -> label
+  function setBusy(id, label) {
+    if (label == null) busy.delete(id); else busy.set(id, label);
+    const spans = document.querySelectorAll(`.tile[data-id="${id}"] .busy`);
+    if (label != null && !spans.length) render();
+    spans.forEach(el => { el.textContent = label || ''; el.hidden = label == null; });
+    if (openId === id) { $('sheetBusy').hidden = label == null; $('sheetBusy').textContent = label ? `${label}. Keep this page open.` : ''; }
+  }
+
+  // Compress any videos, then add the files to the cell as slides.
+  async function fillPost(p, files) {
+    const prepared = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (isVideo(f) && settings.compress) {
+        const label = files.length > 1 ? `Compressing ${i + 1} of ${files.length}` : 'Compressing';
+        setBusy(p.id, `${label}…`);
+        prepared.push(await compressVideo(f, pr => setBusy(p.id, `${label} ${Math.round(pr * 100)}%`)));
+      } else {
+        prepared.push(f);
+      }
+    }
+    setBusy(p.id, null);
+    if (!posts.has(p.id)) return false; // deleted while compressing
+    const wasEmpty = !p.slides.length;
+    p.slides.push(...prepared.map(storeMedia));
+    if (p.slides.length > 1) p.kind = 'carousel';
+    else if (wasEmpty && isVideo(prepared[0]) && p.kind === 'post') p.kind = 'reel';
+    if (wasEmpty) await autoThumb(p);
+    savePost(p);
+    render();
+    if (openId === p.id) renderSheet();
+    return true;
+  }
+  const workingToast = files => toast(files.some(isVideo) && settings.compress
+    ? 'Compressing video so the planner stays fast. Keep this page open.'
+    : `Adding ${files.length} ${files.length === 1 ? 'file' : 'files'}…`, 600000);
+
+  async function addFiles(fileList, mode = 'each') {
+    const files = mediaOnly(fileList);
+    if (!files.length) { toast('Only videos and photos can be added.'); return; }
+    const groups = mode === 'carousel' ? [files] : files.map(f => [f]);
+    // Cells appear right away; each fills in when its files are ready.
+    const created = groups.map(g => {
+      const p = newPost({ kind: kindFor(g) });
+      posts.set(p.id, p);
+      savePost(p);
+      return [p, g];
+    });
+    insertAtTop(created.map(([p]) => p.id)); // first file picked lands top-left, same as reading the grid
+    render();
+    workingToast(files);
+    const unplayable = [];
+    for (const [p, g] of created) {
+      if ((await fillPost(p, g)) && cantPreview(p)) unplayable.push(g[0].name);
+    }
+    if (unplayable.length) warnUnplayable(unplayable);
+    else if (mode === 'carousel') toast(`Carousel with ${files.length} slides added.`);
+    else if (created.some(([p]) => isReel(p))) toast(`Added ${created.length}. Reels show on your grid; tap one to make it Reels-tab only.`, 4500);
+    else toast(`Added ${created.length}. Drag cells to rearrange.`);
+  }
+
+  // Fill one cell with media (from the picker or a file dropped on it).
+  async function addMediaTo(id, fileList) {
+    const p = posts.get(id);
+    const files = mediaOnly(fileList);
+    if (!p) return;
+    if (!files.length) {
+      const names = [...fileList].map(f => f.name).filter(Boolean).join(', ');
+      toast(`${names ? `“${names}” isn't` : "That isn't"} a video or photo this planner recognizes.`, 6000);
+      return;
+    }
+    const wasEmpty = p.slides.length === 0;
+    workingToast(files);
+    if (!(await fillPost(p, files))) return;
+    if (wasEmpty && cantPreview(p)) warnUnplayable([files[0].name]);
+    else if (wasEmpty && isReel(p)) toast('Reel added to your grid. Use “Show on profile grid” to make it Reels-tab only.', 4500);
+    else toast(wasEmpty ? 'Cell filled.' : `Added ${files.length} more ${files.length === 1 ? 'slide' : 'slides'}.`);
+  }
+
+  function parseList(text) {
+    return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
+      const title = line.replace(/^\d+\s*[.\-\/):\]]+\s*/, '').trim() || line;
+      const t = title.toLowerCase();
+      const kind = /trial/.test(t) ? 'trial'
+        : /car+[aeo]?u?s+e?l/.test(t) ? 'carousel'
+        : /\bpost\b|static|photo|image|graphic/.test(t) ? 'post'
+        : 'reel'; // most planned content is video
+      return { title, kind };
+    });
+  }
+  function createFromList(text) {
+    const rows = parseList(text);
+    if (!rows.length) { toast('Paste at least one line.'); return false; }
+    const ids = rows.map(r => {
+      const p = newPost(r);
+      posts.set(p.id, p);
+      persist(store.putPost(p));
+      return p.id;
+    });
+    insertAtTop(ids);
+    render();
+    toast(`Created ${ids.length} cells. Tap one to add its video.`);
+    return true;
+  }
+
+  function saveOrder() { persist(store.set('order', order)); }
+  function savePost(p) { persist(store.putPost(p)); }
+
+  // ---------- Rendering ----------
+  const $ = id => document.getElementById(id);
+  const gridEl = $('grid');
+  const listEl = $('schedList');
+  const icon = (name, size = 18) => `<svg width="${size}" height="${size}"><use href="#i-${name}"/></svg>`;
+  const kindIcon = (p, size) => (p.kind === 'carousel' ? icon('carousel', size) : p.kind === 'reel' || p.kind === 'trial' ? icon('reel', size) : '');
+  const placeholder = p => {
+    const first = p.slides[0];
+    const label = p.title || (first && first.name) || KINDS[p.kind];
+    const sub = first ? `${icon('reel', 11)} .${esc(extOf(first))} · no preview` : '+ add video';
+    return `<div class="ph" style="--h:${hue(p.id)}"><span>${esc(label)}</span><small>${sub}</small></div>`;
+  };
+
+  function tileHTML(p, when) {
+    return (p.thumb ? `<img alt="" draggable="false" src="${urlFor(p.thumb)}">` : placeholder(p)) +
+      (kindIcon(p) ? `<span class="kind">${kindIcon(p)}</span>` : '') +
+      (p.posted ? '<span class="when posted">Live</span>' : when ? `<span class="when">${fmtShort.format(when)}</span>` : '') +
+      (p.kind === 'trial' ? '<span class="trial">Trial</span>' : '') +
+      (busy.has(p.id) ? `<span class="busy">${esc(busy.get(p.id))}</span>` : '');
+  }
+
+  function render() {
+    const dates = scheduleDates();
+    $('postCount').textContent = posts.size;
+    $('empty').hidden = posts.size > 0;
+    const offGrid = order.filter(id => !onGrid(posts.get(id))).length;
+    $('offGridNote').hidden = !offGrid;
+    $('offGridNote').textContent = `${offGrid} ${offGrid === 1 ? 'reel is' : 'reels are'} hidden from the grid (Reels tab only).`;
+
+    gridEl.innerHTML = '';
+    for (const id of order) {
+      const p = posts.get(id);
+      if (!onGrid(p)) continue;
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.dataset.id = id;
+      tile.title = p.title || '';
+      tile.innerHTML = tileHTML(p, dates.get(id));
+      gridEl.appendChild(tile);
+    }
+    if (posts.size) {
+      const add = document.createElement('button');
+      add.className = 'tile add-tile';
+      add.dataset.openAdd = '';
+      add.innerHTML = '<span>+<br>Add</span>';
+      gridEl.appendChild(add);
+    }
+
+    const reels = order.filter(id => ['reel', 'trial'].includes(posts.get(id).kind));
+    const reelsGrid = $('reelsGrid');
+    reelsGrid.innerHTML = '';
+    $('reelsEmpty').hidden = reels.length > 0;
+    for (const id of reels) {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.dataset.id = id;
+      tile.innerHTML = tileHTML(posts.get(id), dates.get(id)) + (onGrid(posts.get(id)) ? '' : '<span class="reels-only">Not on grid</span>');
+      reelsGrid.appendChild(tile);
+    }
+
+    listEl.innerHTML = '';
+    const q = queue();
+    $('schedEmpty').hidden = q.length > 0;
+    q.forEach((id, i) => {
+      const p = posts.get(id);
+      const d = dates.get(id);
+      const li = document.createElement('li');
+      li.className = 'item';
+      li.dataset.id = id;
+      const thumb = p.thumb ? `<span class="thumb" style="background-image:url('${urlFor(p.thumb)}')">${kindIcon(p, 12)}</span>`
+        : `<span class="thumb">${placeholder(p)}</span>`;
+      li.innerHTML =
+        `<span class="num">${i + 1}</span>${thumb}` +
+        `<span class="meta"><div class="date">${fmtLong.format(d)} · ${fmtTime.format(d)}</div>` +
+        `<div class="cap">${esc(p.title || p.caption || 'Untitled')}</div>` +
+        `<div class="sub">${KINDS[p.kind]}${onGrid(p) ? '' : ' · Reels tab only'}${p.slides.length ? '' : ' · needs media'}</div></span>` +
+        `<span class="grip" aria-label="Drag to reorder">${icon('grip', 20)}</span>`;
+      listEl.appendChild(li);
+    });
+    const live = order.filter(id => posts.get(id).posted).length;
+    if (live) {
+      const g = document.createElement('li');
+      g.className = 'list-group';
+      g.textContent = `${live} already posted`;
+      listEl.appendChild(g);
+    }
+
+    if (openId) fillSheetWhen();
+  }
+
+  function renderProfile() {
+    $('username').textContent = profile.username;
+    $('displayName').textContent = profile.name;
+    $('category').textContent = profile.category;
+    $('bioText').textContent = profile.bio;
+    $('link').textContent = profile.link;
+    $('followers').textContent = profile.followers;
+    $('following').textContent = profile.following;
+    $('verifiedBtn').setAttribute('aria-pressed', String(!!profile.verified));
+    renderAvatar();
+  }
+  function renderAvatar() {
+    if (!avatarBlob) return;
+    const u = urlFor(avatarBlob);
+    $('avatar').style.backgroundImage = `url('${u}')`;
+    $('avatar').innerHTML = '';
+    $('miniAvatar').style.backgroundImage = `url('${u}')`;
+  }
+  function renderScheduleInputs() {
+    $('startDate').value = schedule.start;
+    $('postTime').value = schedule.time;
+    $('everyDays').value = schedule.every;
+  }
+
+  // ---------- Drag to reorder (pointer events; works with mouse + touch) ----------
+  // Mouse: drag starts after a few pixels. Touch: press and hold briefly, so normal scrolling still works.
+  function makeSortable(container, itemSelector, { handleSelector, onEnd }) {
+    let pending = null, drag = null, suppressClick = false;
+
+    container.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      const item = e.target.closest(itemSelector);
+      if (!item || !container.contains(item)) return;
+      const onHandle = handleSelector && e.target.closest(handleSelector);
+      pending = { item, x: e.clientX, y: e.clientY, id: e.pointerId, touch: e.pointerType !== 'mouse' };
+      if (pending.touch) {
+        // Grip handles start right away; anywhere else needs a short hold.
+        if (onHandle) start(e);
+        else pending.timer = setTimeout(() => pending && start(pending), 220);
+      }
+    });
+
+    window.addEventListener('pointermove', e => {
+      if (drag) { e.preventDefault(); move(e); return; }
+      if (!pending || e.pointerId !== pending.id) return;
+      const dist = Math.hypot(e.clientX - pending.x, e.clientY - pending.y);
+      if (pending.touch) { if (dist > 8) cancelPending(); }
+      else if (dist > 5) start(e);
+    }, { passive: false });
+
+    // Once a touch drag is live, stop the page from scrolling underneath it.
+    window.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    container.addEventListener('contextmenu', e => { if (e.target.closest(itemSelector)) e.preventDefault(); });
+    container.addEventListener('click', e => {
+      if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false; }
+    }, true);
+
+    function cancelPending() { if (pending) { clearTimeout(pending.timer); pending = null; } }
+
+    function start(e) {
+      const { item } = pending;
+      clearTimeout(pending.timer);
+      const r = item.getBoundingClientRect();
+      const ghost = item.cloneNode(true);
+      ghost.classList.add('drag-ghost');
+      Object.assign(ghost.style, { width: r.width + 'px', height: r.height + 'px', left: r.left + 'px', top: r.top + 'px' });
+      document.body.appendChild(ghost);
+      item.classList.add('dragging-src');
+      document.body.classList.add('is-dragging');
+      drag = { item, ghost, dx: pending.x - r.left, dy: pending.y - r.top, lastX: pending.x, lastY: pending.y };
+      pending = null;
+      if (navigator.vibrate) try { navigator.vibrate(10); } catch {}
+      move({ clientX: e.clientX ?? e.x, clientY: e.clientY ?? e.y });
+      autoScroll();
+    }
+
+    function move(e) {
+      drag.lastX = e.clientX; drag.lastY = e.clientY;
+      drag.ghost.style.left = (e.clientX - drag.dx) + 'px';
+      drag.ghost.style.top = (e.clientY - drag.dy) + 'px';
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const target = under && under.closest(itemSelector);
+      if (!target || target === drag.item || target._flipping || !container.contains(target)) return;
+      const items = [...container.querySelectorAll(itemSelector)];
+      const from = items.indexOf(drag.item), to = items.indexOf(target);
+      flip(items, () => target.insertAdjacentElement(to > from ? 'afterend' : 'beforebegin', drag.item));
+    }
+
+    function autoScroll() {
+      if (!drag) return;
+      const edge = 70, y = drag.lastY, h = window.innerHeight;
+      if (y < edge + 90) window.scrollBy(0, -Math.ceil((edge + 90 - y) / 6));
+      else if (y > h - edge - 50) window.scrollBy(0, Math.ceil((y - (h - edge - 50)) / 6));
+      drag.raf = requestAnimationFrame(() => { if (drag) { move({ clientX: drag.lastX, clientY: drag.lastY }); autoScroll(); } });
+    }
+
+    function end() {
+      cancelPending();
+      if (!drag) return;
+      cancelAnimationFrame(drag.raf);
+      drag.ghost.remove();
+      drag.item.classList.remove('dragging-src');
+      document.body.classList.remove('is-dragging');
+      drag = null;
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 400);
+      onEnd([...container.querySelectorAll(itemSelector)].map(el => el.dataset.id));
+    }
+
+    // Smoothly slide the other items into their new spots.
+    function flip(items, mutate) {
+      const before = new Map(items.map(el => [el, el.getBoundingClientRect()]));
+      mutate();
+      for (const el of items) {
+        if (el === drag.item) continue;
+        const a = before.get(el), b = el.getBoundingClientRect();
+        const dx = a.left - b.left, dy = a.top - b.top;
+        if (!dx && !dy) continue;
+        // Ignore items while they slide, or the pointer would bounce them straight back.
+        el._flipping = true;
+        clearTimeout(el._flipTimer);
+        el._flipTimer = setTimeout(() => { el._flipping = false; }, 200);
+        el.style.transition = 'none';
+        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        requestAnimationFrame(() => {
+          el.style.transition = 'transform .18s ease';
+          el.style.transform = '';
+        });
+      }
+    }
+  }
+
+  makeSortable(gridEl, '.tile[data-id]', {
+    onEnd(ids) {
+      let k = 0;
+      order = order.map(id => (onGrid(posts.get(id)) ? ids[k++] : id));
+      saveOrder(); render();
+    },
+  });
+  makeSortable(listEl, '.item', {
+    handleSelector: '.grip',
+    onEnd(newQueue) {
+      // Put the new posting order back into the unposted slots of the grid.
+      const reversed = newQueue.slice().reverse();
+      let k = 0;
+      order = order.map(id => (posts.get(id).posted ? id : reversed[k++]));
+      saveOrder(); render();
+    },
+  });
+
+  // ---------- Modals ----------
+  const openModals = [];
+  function openModal(id) {
+    $(id).hidden = false;
+    openModals.push(id);
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal(id) {
+    if (id === 'sheet') return closeSheet();
+    $(id).hidden = true;
+    const i = openModals.indexOf(id);
+    if (i >= 0) openModals.splice(i, 1);
+    if (!openModals.length) document.body.style.overflow = '';
+  }
+  document.querySelectorAll('.backdrop').forEach(b => {
+    b.addEventListener('click', e => {
+      if (e.target === b || e.target.closest('[data-close]')) closeModal(b.id);
+    });
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && openModals.length) closeModal(openModals[openModals.length - 1]);
+  });
+
+  // ---------- Post viewer / editor ----------
+  function openSheet(id) {
+    if (!posts.get(id)) return;
+    openId = id;
+    renderSheet();
+    openModal('sheet');
+    $('sheet').querySelector('.sheet').scrollTop = 0;
+  }
+  function closeSheet() {
+    document.querySelectorAll('#slides video').forEach(v => v.pause());
+    $('slides').innerHTML = '';
+    $('sheet').hidden = true;
+    const i = openModals.indexOf('sheet');
+    if (i >= 0) openModals.splice(i, 1);
+    if (!openModals.length) document.body.style.overflow = '';
+    openId = null;
+  }
+
+  function renderSheet() {
+    const p = posts.get(openId);
+    if (!p) return;
+    const slidesEl = $('slides');
+    slidesEl.innerHTML = '';
+    if (!p.slides.length) {
+      slidesEl.innerHTML = `<div class="slide-empty" style="background:hsl(${hue(p.id)} 22% 30%)"><div>` +
+        `<p>${esc(p.title || 'Empty cell')}</p>` +
+        (busy.has(p.id) ? '<p>Your video is being compressed. This cell fills in when it’s done.</p>' : '<button class="btn" data-add-media>Add video or photo</button>') +
+        '</div></div>';
+    }
+    $('sheetBusy').hidden = !busy.has(p.id);
+    $('sheetBusy').textContent = busy.has(p.id) ? `${busy.get(p.id)}. Keep this page open.` : '';
+    const showProblem = (s, html) => {
+      s.querySelectorAll('video, img').forEach(el => el.remove());
+      const msg = document.createElement('div');
+      msg.className = 'slide-empty';
+      msg.innerHTML = `<div>${html}</div>`;
+      s.prepend(msg);
+      onSlideChange();
+    };
+    const missing = slide => `<p><b>${esc(slide.name || 'This file')}</b></p><p>This file isn't saved in this browser anymore. Remove this slide and add the file again.</p>`;
+    p.slides.forEach((slide, i) => {
+      const s = document.createElement('div');
+      s.className = 'slide';
+      if (isVideo(slide)) {
+        const v = document.createElement('video');
+        v.controls = true; v.playsInline = true; v.preload = 'metadata';
+        loadMedia(slide).then(b => { if (!v.isConnected) return; if (b) v.src = urlFor(b); else showProblem(s, missing(slide)); });
+        if (i === 0 && p.thumb) v.poster = urlFor(p.thumb);
+        v.addEventListener('timeupdate', syncScrub);
+        v.addEventListener('loadedmetadata', syncScrub);
+        const unplayable = () => {
+          if (!v.isConnected) return;
+          showProblem(s, `<p><b>${esc(slide.name || 'This video')}</b></p><p>This browser can't play this video format. ` +
+            `ProRes and some iPhone (HEVC) videos only play in Safari. Open the planner in Safari, or export an H.264 MP4.</p>` +
+            `<p>You can still set its grid cover with “Upload image” below.</p>`);
+        };
+        v.addEventListener('error', () => { if (v.getAttribute('src')) unplayable(); });
+        v.addEventListener('loadedmetadata', () => { if (!v.videoWidth) unplayable(); });
+        s.appendChild(v);
+      } else {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.onerror = () => { img.onerror = null; if (p.thumb) img.src = urlFor(p.thumb); };
+        loadMedia(slide).then(b => { if (!img.isConnected) return; if (b) img.src = urlFor(b); else showProblem(s, missing(slide)); });
+        s.appendChild(img);
+      }
+      const rm = document.createElement('button');
+      rm.className = 'rm';
+      rm.dataset.remove = i;
+      rm.setAttribute('aria-label', 'Remove this slide');
+      rm.innerHTML = icon('x', 16);
+      s.appendChild(rm);
+      slidesEl.appendChild(s);
+    });
+    slidesEl.scrollLeft = 0;
+    $('sheetTitle').value = p.title;
+    $('sheetCaption').value = p.caption;
+    $('sheetPosted').checked = p.posted;
+    $('addMediaBtn').textContent = p.slides.length ? 'Add another slide' : 'Add video or photo';
+    renderKind();
+    fillSheetWhen();
+    onSlideChange();
+  }
+
+  function renderKind() {
+    const p = posts.get(openId);
+    document.querySelectorAll('#sheetKind button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === p.kind)));
+    $('kindHint').textContent = KIND_HINTS[p.kind];
+    $('kindHint').hidden = !KIND_HINTS[p.kind];
+    $('gridRow').hidden = !isReel(p);
+    $('sheetOnGrid').checked = onGrid(p);
+    $('gridHint').textContent = onGrid(p) ? 'Appears in your feed grid and the Reels tab.' : 'Reels tab only. Turn on to see it in the feed.';
+  }
+
+  function fillSheetWhen() {
+    const p = posts.get(openId);
+    if (!p) return;
+    const el = $('sheetWhen');
+    if (p.posted) { el.innerHTML = 'Live on your profile<small>Not part of the schedule</small>'; return; }
+    const d = scheduleDates().get(openId);
+    const n = queue().indexOf(openId) + 1;
+    el.innerHTML = `${fmtLong.format(d)} at ${fmtTime.format(d)}<small>Post #${n} in the queue · drag the cell to change</small>`;
+  }
+
+  const currentIndex = () => { const s = $('slides'); return s.clientWidth ? Math.round(s.scrollLeft / s.clientWidth) : 0; };
+  const currentVideo = () => { const s = $('slides').children[currentIndex()]; return s && s.querySelector('video'); };
+
+  function onSlideChange() {
+    const p = posts.get(openId);
+    if (!p) return;
+    const n = p.slides.length, i = currentIndex();
+    $('slideCount').hidden = n < 2;
+    $('slideCount').textContent = `${i + 1}/${n}`;
+    $('dots').innerHTML = n > 1 ? p.slides.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('') : '';
+    document.querySelectorAll('#slides video').forEach((v, k) => { if (v !== currentVideo()) v.pause(); });
+    renderCover();
+  }
+  let slideRaf;
+  $('slides').addEventListener('scroll', () => { cancelAnimationFrame(slideRaf); slideRaf = requestAnimationFrame(onSlideChange); });
+
+  // Grid thumbnail: live 3:4 preview of the saved cover, or of the frame you're scrubbing to.
+  let previewing = false;
+  function renderCover() {
+    const p = posts.get(openId);
+    const v = currentVideo();
+    const box = $('coverPreview');
+    previewing = false;
+    $('coverBox').hidden = !p.slides.length;
+    box.innerHTML = p.thumb ? `<img alt="" src="${urlFor(p.thumb)}">` : placeholder(p);
+    $('scrub').hidden = !v;
+    $('frameBtn').hidden = !v;
+    $('resetThumbBtn').hidden = !p.customThumb;
+    $('coverHint').textContent = v
+      ? 'Play the video or drag the slider to a frame, then tap “Use this frame”.'
+      : p.slides.length > 1 ? 'Swipe to a video slide to pick a frame, or upload any image.' : 'Upload a different image to use on the grid.';
+    syncScrub();
+  }
+  function previewFrame(v) {
+    if (!v.videoWidth) return;
+    let c = $('coverPreview').querySelector('canvas');
+    if (!c) { c = document.createElement('canvas'); $('coverPreview').innerHTML = ''; $('coverPreview').appendChild(c); }
+    const scale = Math.min(1, 320 / v.videoWidth);
+    c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    previewing = true;
+  }
+  function syncScrub(e) {
+    const v = currentVideo();
+    if (!v || (e && e.target !== v)) return;
+    if (v.duration) $('scrub').value = Math.round((v.currentTime / v.duration) * 1000);
+    if (e && e.type === 'timeupdate' && (previewing || !v.paused)) previewFrame(v);
+  }
+  $('scrub').addEventListener('input', e => {
+    const v = currentVideo();
+    if (!v || !v.duration) return;
+    v.pause();
+    v.currentTime = (e.target.value / 1000) * v.duration;
+    v.addEventListener('seeked', () => previewFrame(v), { once: true });
+  });
+
+  async function setThumb(p, blob, custom) {
+    if (p.thumb && p.thumb !== blob) dropUrl(p.thumb);
+    p.thumb = blob;
+    p.customThumb = custom;
+    savePost(p);
+    render();
+    renderCover();
+    const first = $('slides').querySelector('.slide video');
+    if (first && blob && isVideo(p.slides[0])) first.poster = urlFor(blob);
+  }
+
+  $('frameBtn').addEventListener('click', async () => {
+    const p = posts.get(openId);
+    const v = currentVideo();
+    if (!p || !v || !v.videoWidth) { toast('Play or scrub the video to the frame you want first.'); return; }
+    v.pause();
+    const blob = await drawScaled(v, v.videoWidth, v.videoHeight);
+    if (blob) { await setThumb(p, blob, true); toast('Thumbnail set.'); }
+  });
+  $('thumbBtn').addEventListener('click', () => $('thumbInput').click());
+  $('thumbInput').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    const p = posts.get(openId);
+    if (!f || !p) return;
+    await setThumb(p, await imageThumb(f), true);
+    toast('Thumbnail set.');
+  });
+  $('resetThumbBtn').addEventListener('click', async () => {
+    const p = posts.get(openId); if (!p) return;
+    p.customThumb = false;
+    await autoThumb(p);
+    await setThumb(p, p.thumb, false);
+    toast('Thumbnail reset.');
+  });
+
+  $('sheetTitle').addEventListener('input', e => {
+    const p = posts.get(openId); if (!p) return;
+    p.title = e.target.value; savePost(p); render();
+  });
+  $('sheetKind').addEventListener('click', e => {
+    const b = e.target.closest('[data-kind]');
+    const p = posts.get(openId);
+    if (!b || !p) return;
+    p.kind = b.dataset.kind; savePost(p); renderKind(); render();
+  });
+  $('sheetOnGrid').addEventListener('change', e => {
+    const p = posts.get(openId); if (!p) return;
+    p.onGrid = e.target.checked; savePost(p); renderKind(); render();
+    toast(p.onGrid ? 'Now showing on your grid.' : 'Hidden from the grid. Still in the Reels tab and schedule.');
+  });
+  $('sheetCaption').addEventListener('input', e => {
+    const p = posts.get(openId); if (!p) return;
+    p.caption = e.target.value; savePost(p); render();
+  });
+  $('sheetPosted').addEventListener('change', e => {
+    const p = posts.get(openId); if (!p) return;
+    p.posted = e.target.checked; savePost(p); render();
+  });
+
+  let mediaTarget = null;
+  function pickMediaFor(id) { mediaTarget = id; $('mediaInput').click(); }
+  $('addMediaBtn').addEventListener('click', () => pickMediaFor(openId));
+  $('slides').addEventListener('click', async e => {
+    if (e.target.closest('[data-add-media]')) return pickMediaFor(openId);
+    const rm = e.target.closest('[data-remove]');
+    const p = posts.get(openId);
+    if (!rm || !p) return;
+    confirmTap(rm, 'Tap again to remove', () => removeSlide(p, Number(rm.dataset.remove)));
+  });
+  async function removeSlide(p, index) {
+    const [gone] = p.slides.splice(index, 1);
+    forgetMedia(gone);
+    if (!p.customThumb || !p.slides.length) { p.customThumb = false; await autoThumb(p); }
+    if (p.kind === 'carousel' && p.slides.length === 1) p.kind = isVideo(p.slides[0]) ? 'reel' : 'post';
+    savePost(p); render(); renderSheet();
+  }
+  $('mediaInput').addEventListener('change', e => {
+    const files = [...e.target.files]; e.target.value = '';
+    const target = mediaTarget || openId;
+    mediaTarget = null;
+    if (target && files.length) addMediaTo(target, files);
+  });
+
+  $('deleteBtn').addEventListener('click', e => {
+    const p = posts.get(openId); if (!p) return;
+    confirmTap(e.currentTarget, 'Tap again to delete', () => deleteCell(p));
+  });
+  function deleteCell(p) {
+    closeSheet();
+    dropUrl(p.thumb); p.slides.forEach(forgetMedia);
+    posts.delete(p.id);
+    order = order.filter(id => id !== p.id);
+    persist(store.deletePost(p.id));
+    saveOrder(); render();
+    toast('Cell deleted.');
+  }
+
+  // ---------- Wiring ----------
+  let pickMode = 'each';
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-open-add], [data-open-paste], [data-pick], [data-add-placeholder], [data-goto]');
+    if (!t) return;
+    if (t.matches('[data-open-add]')) openModal('addMenu');
+    else if (t.matches('[data-open-paste]')) { closeModal('addMenu'); openModal('pasteModal'); setTimeout(() => $('pasteText').focus(), 50); }
+    else if (t.matches('[data-pick]')) { pickMode = t.dataset.pick; closeModal('addMenu'); $('fileInput').click(); }
+    else if (t.matches('[data-add-placeholder]')) {
+      closeModal('addMenu');
+      const p = newPost({ kind: 'reel', title: '' });
+      posts.set(p.id, p); savePost(p); insertAtTop([p.id]); render();
+      setTab('grid');
+      openSheet(p.id);
+      setTimeout(() => $('sheetTitle').focus(), 50);
+    } else if (t.matches('[data-goto]')) {
+      setTab(t.dataset.goto);
+      if (t.matches('[data-scroll-top]')) window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  });
+  $('fileInput').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) addFiles(f, pickMode); });
+  $('pasteCreate').addEventListener('click', () => {
+    if (createFromList($('pasteText').value)) { $('pasteText').value = ''; closeModal('pasteModal'); setTab('grid'); }
+  });
+
+  function onTileClick(e) {
+    const tile = e.target.closest('.tile[data-id]');
+    if (tile) openSheet(tile.dataset.id);
+  }
+  gridEl.addEventListener('click', onTileClick);
+  $('reelsGrid').addEventListener('click', onTileClick);
+  listEl.addEventListener('click', e => {
+    if (e.target.closest('.grip')) return;
+    const item = e.target.closest('.item');
+    if (item) openSheet(item.dataset.id);
+  });
+
+  function setTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === tab)));
+    $('gridView').hidden = tab !== 'grid';
+    $('reelsView').hidden = tab !== 'reels';
+    $('scheduleView').hidden = tab !== 'schedule';
+    try { localStorage.setItem('feed-planner-tab', tab); } catch {}
+  }
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
+
+  // Profile editing
+  const profileFields = { username: 'username', displayName: 'name', category: 'category', bioText: 'bio', link: 'link', followers: 'followers', following: 'following' };
+  let profileTimer;
+  const saveProfile = () => { clearTimeout(profileTimer); profileTimer = setTimeout(() => persist(store.set('profile', profile)), 300); };
+  for (const [elId, key] of Object.entries(profileFields)) {
+    const el = $(elId);
+    el.addEventListener('input', () => { profile[key] = el.textContent; saveProfile(); });
+    if (key !== 'bio') el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+  }
+  $('verifiedBtn').addEventListener('click', () => {
+    profile.verified = !profile.verified;
+    $('verifiedBtn').setAttribute('aria-pressed', String(profile.verified));
+    saveProfile();
+  });
+  $('avatar').addEventListener('click', () => $('avatarInput').click());
+  $('avatarInput').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    if (avatarBlob) dropUrl(avatarBlob);
+    avatarBlob = await imageThumb(f);
+    persist(store.set('avatar', avatarBlob));
+    renderAvatar();
+  });
+
+  $('compressToggle').addEventListener('change', e => {
+    settings.compress = e.target.checked;
+    persist(store.set('settings', settings));
+    toast(settings.compress ? 'New videos will be compressed.' : 'New videos will be kept at full size.');
+  });
+
+  // Schedule settings
+  function onScheduleChange() {
+    schedule = {
+      start: $('startDate').value || todayISO(),
+      time: $('postTime').value || '18:00',
+      every: Math.min(60, Math.max(1, parseInt($('everyDays').value, 10) || 1)),
+    };
+    persist(store.set('schedule', schedule));
+    render();
+  }
+  ['startDate', 'postTime', 'everyDays'].forEach(id => $(id).addEventListener('change', onScheduleChange));
+
+  // Drag files from your computer: onto a cell fills that cell, anywhere else adds new cells.
+  let dragDepth = 0, dropTile = null;
+  const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].some(t => t === 'Files' || t === 'text/uri-list');
+  function markDropTile(el) {
+    if (dropTile === el) return;
+    if (dropTile) dropTile.classList.remove('drop-target');
+    dropTile = el;
+    if (dropTile) dropTile.classList.add('drop-target');
+  }
+  window.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('dropOverlay').hidden = false; });
+  window.addEventListener('dragover', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    markDropTile(e.target.closest && e.target.closest('.tile[data-id]'));
+  });
+  window.addEventListener('dragleave', e => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; $('dropOverlay').hidden = true; markDropTile(null); } });
+  window.addEventListener('drop', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); dragDepth = 0; $('dropOverlay').hidden = true;
+    const tile = e.target.closest && e.target.closest('.tile[data-id]');
+    markDropTile(null);
+    if (!e.dataTransfer.files.length) {
+      toast("That came through as a link, not a file. Download the video to your computer first, then drag it in, or tap a cell and choose it.", 8000);
+      return;
+    }
+    if (openId && !$('sheet').hidden) addMediaTo(openId, e.dataTransfer.files);
+    else if (tile) addMediaTo(tile.dataset.id, e.dataTransfer.files);
+    else addFiles(e.dataTransfer.files);
+  });
+
+  // Two-tap confirm: first tap arms the button for 3 seconds, second tap runs the action.
+  function confirmTap(btn, armedHTML, run) {
+    if (btn.dataset.armed) {
+      clearTimeout(btn._disarm);
+      btn.innerHTML = btn.dataset.original; delete btn.dataset.armed; btn.classList.remove('armed');
+      run();
+      return;
+    }
+    btn.dataset.original = btn.innerHTML;
+    btn.dataset.armed = '1';
+    btn.innerHTML = armedHTML;
+    btn.classList.add('armed');
+    btn._disarm = setTimeout(() => {
+      if (!btn.dataset.armed) return;
+      btn.innerHTML = btn.dataset.original; delete btn.dataset.armed; btn.classList.remove('armed');
+    }, 3000);
+  }
+
+  let toastTimer;
+  function toast(msg, ms = 2600) {
+    const t = $('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+  }
+
+  // ---------- Backup (one .zip with the plan as JSON plus every file) ----------
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  // Minimal ZIP writer: files are stored as-is (videos are already compressed), so the archive is built
+  // from the original Blobs without holding everything in memory at once.
+  async function buildZip(entries, onEach) {
+    const enc = new TextEncoder();
+    const parts = [], central = [];
+    let offset = 0;
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    for (let i = 0; i < entries.length; i++) {
+      const { name, blob } = entries[i];
+      const nameBytes = enc.encode(name);
+      const crc = crc32(new Uint8Array(await blob.arrayBuffer()));
+      const size = blob.size;
+      if (offset + size > 0xF0000000) throw new Error('too_big');
+      const head = new DataView(new ArrayBuffer(30));
+      head.setUint32(0, 0x04034b50, true); head.setUint16(4, 20, true); head.setUint16(6, 0x0800, true);
+      head.setUint16(8, 0, true); head.setUint16(10, dosTime, true); head.setUint16(12, dosDate, true);
+      head.setUint32(14, crc, true); head.setUint32(18, size, true); head.setUint32(22, size, true);
+      head.setUint16(26, nameBytes.length, true); head.setUint16(28, 0, true);
+      parts.push(head.buffer, nameBytes, blob);
+      const cd = new DataView(new ArrayBuffer(46));
+      cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true); cd.setUint16(8, 0x0800, true);
+      cd.setUint16(10, 0, true); cd.setUint16(12, dosTime, true); cd.setUint16(14, dosDate, true);
+      cd.setUint32(16, crc, true); cd.setUint32(20, size, true); cd.setUint32(24, size, true);
+      cd.setUint16(28, nameBytes.length, true); cd.setUint32(42, offset, true);
+      central.push(cd.buffer, nameBytes);
+      offset += 30 + nameBytes.length + size;
+      onEach && onEach(i + 1, entries.length);
+    }
+    const cdSize = central.reduce((n, b) => n + b.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+  }
+  // Reads the stored (uncompressed) ZIPs this planner writes. Returns name -> Blob slice.
+  async function readZip(file) {
+    const tailStart = Math.max(0, file.size - 65557);
+    const tail = new DataView(await file.slice(tailStart).arrayBuffer());
+    let eocd = -1;
+    for (let i = tail.byteLength - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error('not_zip');
+    const count = tail.getUint16(eocd + 10, true);
+    const cdSize = tail.getUint32(eocd + 12, true), cdOffset = tail.getUint32(eocd + 16, true);
+    const cd = new DataView(await file.slice(cdOffset, cdOffset + cdSize).arrayBuffer());
+    const dec = new TextDecoder();
+    const out = new Map();
+    for (let i = 0, p = 0; i < count; i++) {
+      if (cd.getUint32(p, true) !== 0x02014b50) throw new Error('not_zip');
+      const method = cd.getUint16(p + 10, true), size = cd.getUint32(p + 20, true);
+      const nameLen = cd.getUint16(p + 28, true), extraLen = cd.getUint16(p + 30, true), commentLen = cd.getUint16(p + 32, true);
+      const local = cd.getUint32(p + 42, true);
+      const name = dec.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nameLen));
+      p += 46 + nameLen + extraLen + commentLen;
+      if (method !== 0) continue; // not something this planner wrote
+      const lh = new DataView(await file.slice(local, local + 30).arrayBuffer());
+      const start = local + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+      out.set(name, file.slice(start, start + size));
+    }
+    return out;
+  }
+
+  const extFor = (blob, fallback) => (extOf(blob) && extOf(blob) !== (blob.name || '').toLowerCase() ? extOf(blob)
+    : ({ 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[blob.type] || fallback));
+  const fmtDateTime = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  function showBackupStatus(msg) { $('backupStatus').hidden = !msg; $('backupStatus').textContent = msg || ''; }
+  async function renderLastBackup() {
+    let at = null;
+    try { at = await store.get('lastBackup'); } catch {}
+    $('lastBackup').textContent = at ? `Last saved ${fmtDateTime.format(new Date(at))}.` : 'No backup saved yet.';
+  }
+
+  // Hands the file to the viewer: through Claude's save prompt when the page runs inside Claude,
+  // otherwise as a normal browser download.
+  async function offerFile(filename, blob) {
+    const claudeHost = window.claude && typeof window.claude.use === 'function';
+    const downloads = claudeHost ? await window.claude.use('downloads').catch(() => null) : null;
+    if (downloads) { await downloads.save({ filename, data: blob }); return; }
+    if (claudeHost) throw { code: 'unavailable' };
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+  }
+
+  async function saveBackup() {
+    const btn = $('backupSave');
+    btn.disabled = true;
+    showBackupStatus('Preparing backup…');
+    try {
+      const entries = [];
+      const plan = { app: 'dreamvision-feed-planner', version: 1, exportedAt: new Date().toISOString(), order, profile, schedule, settings, posts: [], avatar: null };
+      for (const id of order) {
+        const p = posts.get(id);
+        const rec = { ...p, thumb: null, slides: [] };
+        if (p.thumb) { rec.thumb = { file: `thumbs/${p.id}.${extFor(p.thumb, 'jpg')}`, type: p.thumb.type || 'image/jpeg' }; entries.push({ name: rec.thumb.file, blob: p.thumb }); }
+        for (const slide of p.slides) {
+          const blob = await loadMedia(slide);
+          if (!blob) continue; // file no longer in this browser
+          const file = `media/${slide.id}.${extFor(slide, blob.type.startsWith('video/') ? 'mp4' : 'jpg')}`;
+          rec.slides.push({ ...slide, file });
+          entries.push({ name: file, blob });
+        }
+        plan.posts.push(rec);
+      }
+      if (avatarBlob) { plan.avatar = { file: `avatar.${extFor(avatarBlob, 'jpg')}`, type: avatarBlob.type || 'image/jpeg' }; entries.push({ name: plan.avatar.file, blob: avatarBlob }); }
+      entries.unshift({ name: 'planner.json', blob: new Blob([JSON.stringify(plan, null, 1)], { type: 'application/json' }) });
+      const zip = await buildZip(entries, (n, total) => showBackupStatus(`Preparing backup… ${n} of ${total} files`));
+      const mb = (zip.size / 1048576).toFixed(1);
+      showBackupStatus(`Backup ready (${mb} MB). Confirm the save to keep it.`);
+      const handle = (profile.username || 'feed').replace(/[^\w.-]+/g, '-');
+      await offerFile(`${handle}-plan-${todayISO()}.zip`, zip);
+      const at = Date.now();
+      persist(store.set('lastBackup', at));
+      $('lastBackup').textContent = `Last saved ${fmtDateTime.format(new Date(at))}.`;
+      showBackupStatus(`Saved ${plan.posts.length} posts (${mb} MB). Keep the file somewhere safe, like iCloud Drive or Google Drive.`);
+    } catch (err) {
+      const code = err && err.code;
+      showBackupStatus(
+        code === 'declined' ? 'Backup not saved.' :
+        code === 'rate_limited' ? 'A save prompt is already open. Finish that one first.' :
+        code === 'too_large' ? 'This backup is too large to save here. Try from a computer.' :
+        err && err.message === 'too_big' ? 'This plan is over 4 GB, too big for one backup. Turn on Compress videos and re-add the largest videos.' :
+        code ? "Saving files isn't available in this view. Open the planner in a browser to save a backup." :
+        "Couldn't create the backup. Try again, or reload the page first.");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  let pendingRestore = null;
+  async function pickRestore(file) {
+    showBackupStatus('Reading backup…');
+    try {
+      const files = await readZip(file);
+      const planBlob = files.get('planner.json');
+      if (!planBlob) throw new Error('not_backup');
+      const plan = JSON.parse(await planBlob.text());
+      if (plan.app !== 'dreamvision-feed-planner' || !Array.isArray(plan.posts)) throw new Error('not_backup');
+      pendingRestore = { plan, files };
+      const when = plan.exportedAt ? fmtDateTime.format(new Date(plan.exportedAt)) : 'an unknown date';
+      $('restoreText').textContent = `Replace everything in the planner with this backup from ${when} (${plan.posts.length} posts)? What's in the planner now will be removed.`;
+      $('restoreConfirm').hidden = false;
+      showBackupStatus('');
+    } catch {
+      pendingRestore = null;
+      showBackupStatus("That file isn't a planner backup. Choose a .zip saved with “Save backup file”.");
+    }
+  }
+  async function runRestore() {
+    if (!pendingRestore) return;
+    const { plan, files } = pendingRestore;
+    const asFile = (ref, name) => { const b = ref && files.get(ref.file); return b ? new File([b], name || ref.file.split('/').pop(), { type: ref.type || '' }) : null; };
+    const media = [];
+    const restoredPosts = plan.posts.map(rec => {
+      const p = { ...rec, thumb: asFile(rec.thumb), slides: [] };
+      for (const s of rec.slides || []) {
+        const blob = asFile(s, s.name);
+        if (!blob) continue;
+        media.push([s.id, blob]);
+        p.slides.push({ id: s.id, type: s.type, name: s.name });
+      }
+      return p;
+    });
+    const kv = [['order', plan.order || restoredPosts.map(p => p.id)], ['profile', plan.profile || {}], ['schedule', plan.schedule || {}], ['settings', plan.settings || {}]];
+    const avatar = asFile(plan.avatar);
+    if (avatar) kv.push(['avatar', avatar]);
+    showBackupStatus('Restoring…');
+    try {
+      await store.replaceAll({ posts: restoredPosts, media, kv });
+      showBackupStatus('Restored. Reloading…');
+      setTimeout(() => location.reload(), 400);
+    } catch {
+      showBackupStatus("Couldn't restore the backup in this browser. Nothing was changed.");
+    }
+  }
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-open-backup]')) {
+      $('restoreConfirm').hidden = true; pendingRestore = null; showBackupStatus('');
+      renderLastBackup();
+      openModal('backupModal');
+    }
+  });
+  $('backupSave').addEventListener('click', saveBackup);
+  $('backupLoad').addEventListener('click', () => $('backupInput').click());
+  $('backupInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) pickRestore(f); });
+  $('restoreCancel').addEventListener('click', () => { pendingRestore = null; $('restoreConfirm').hidden = true; });
+  $('restoreGo').addEventListener('click', runRestore);
+
+  // ---------- Screenshot preview ----------
+  // Hides the toolbar, banner buttons, schedule badges, hints and editing outlines. Esc exits; on a
+  // touch screen, tapping shows an "Exit preview" button for a moment, then it fades out again.
+  let previewPillTimer;
+  function showExitPill(ms) {
+    $('exitPreview').classList.add('show');
+    clearTimeout(previewPillTimer);
+    previewPillTimer = setTimeout(() => $('exitPreview').classList.remove('show'), ms);
+  }
+  function setPreview(on) {
+    document.body.classList.toggle('preview', on);
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    if (on) { $('toast').hidden = true; if (currentTab === 'schedule') setTab('grid'); showExitPill(2500); }
+  }
+  document.addEventListener('click', e => { if (e.target.closest('[data-preview]')) setPreview(true); });
+  $('exitPreview').addEventListener('click', () => setPreview(false));
+  // Capture phase, so Esc closes an open dialog first and only exits preview when nothing is open.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.body.classList.contains('preview') && !openModals.length) setPreview(false);
+  }, true);
+  document.addEventListener('mousemove', e => {
+    if (document.body.classList.contains('preview') && e.clientY < 90 && e.clientX > window.innerWidth - 260) showExitPill(1500);
+  });
+  document.addEventListener('touchstart', () => { if (document.body.classList.contains('preview')) showExitPill(2500); }, { passive: true });
+
+  // ---------- Snapshot: the page as it looks in Preview, saved as PNG or PDF ----------
+  // html2canvas and jsPDF load from cdnjs only when a snapshot is taken.
+  const SNAP_LIBS = {
+    html2canvas: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  };
+  const loadedScripts = {};
+  function loadScript(url) {
+    if (!loadedScripts[url]) {
+      loadedScripts[url] = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url;
+        s.onload = resolve;
+        s.onerror = () => { delete loadedScripts[url]; reject(new Error('script_load')); };
+        document.head.appendChild(s);
+      });
+    }
+    return loadedScripts[url];
+  }
+  // html2canvas skips a few things the browser draws: object-fit, <use> icons, video frames and
+  // fixed/sticky bars. Patch the copy it renders so the snapshot matches the screen.
+  function prepareSnapshotClone(doc) {
+    const win = doc.defaultView;
+    doc.querySelectorAll('svg use').forEach(use => {
+      const ref = use.getAttribute('href') || use.getAttribute('xlink:href') || '';
+      const sym = ref.startsWith('#') && doc.getElementById(ref.slice(1));
+      if (!sym) return;
+      const svg = use.closest('svg');
+      if (svg && !svg.getAttribute('viewBox') && sym.getAttribute('viewBox')) svg.setAttribute('viewBox', sym.getAttribute('viewBox'));
+      use.replaceWith(...[...sym.childNodes].map(n => n.cloneNode(true)));
+    });
+    doc.querySelectorAll('video').forEach(v => {
+      const img = doc.createElement('img');
+      if (v.poster) img.src = v.poster;
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000;display:block';
+      v.replaceWith(img);
+    });
+    doc.querySelectorAll('img').forEach(img => {
+      const cs = win.getComputedStyle(img);
+      if (cs.objectFit !== 'cover' && cs.objectFit !== 'contain') return;
+      if (!img.getAttribute('src')) return;
+      const d = doc.createElement('div');
+      Object.assign(d.style, {
+        width: cs.width, height: cs.height, display: cs.display === 'inline' ? 'inline-block' : cs.display,
+        position: cs.position, top: cs.top, left: cs.left, right: cs.right, bottom: cs.bottom,
+        borderRadius: cs.borderRadius, backgroundColor: cs.backgroundColor,
+        backgroundImage: `url("${img.src}")`, backgroundSize: cs.objectFit, backgroundPosition: cs.objectPosition || 'center', backgroundRepeat: 'no-repeat',
+      });
+      img.replaceWith(d);
+    });
+    doc.querySelectorAll('body *').forEach(el => {
+      const pos = win.getComputedStyle(el).position;
+      if (pos === 'sticky') Object.assign(el.style, { position: 'relative', top: 'auto', bottom: 'auto' });
+      else if (pos === 'fixed') Object.assign(el.style, { position: 'absolute', left: '0', right: '0', transform: 'none' });
+    });
+  }
+  async function captureCanvas() {
+    await loadScript(SNAP_LIBS.html2canvas);
+    const target = document.querySelector('.app');
+    const wasPreview = document.body.classList.contains('preview');
+    const scrollY = window.scrollY;
+    document.body.classList.add('preview');
+    $('toast').hidden = true;
+    const hiddenForSnap = [];
+    const hideForSnap = el => { if (el && el.style.display !== 'none') { hiddenForSnap.push([el, el.style.display]); el.style.display = 'none'; } };
+    document.querySelectorAll('.hide-empty').forEach(el => {
+      if (el.textContent.trim()) return;
+      hideForSnap(el.closest('.row-hide-empty') || el);
+    });
+    document.querySelectorAll('.ptext').forEach(el => { if (!el.textContent.trim()) hideForSnap(el.closest('.ptext-wrap')); });
+    window.scrollTo(0, 0);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await Promise.all([...target.querySelectorAll('img')].map(img => (img.decode ? img.decode().catch(() => {}) : null)));
+    try {
+      const w = target.offsetWidth, h = target.scrollHeight;
+      // Stay under ~16 million pixels so phones (Safari's canvas limit) can render long pages.
+      const scale = Math.max(0.5, Math.min(2, Math.sqrt(16e6 / (w * h))));
+      const canvas = await window.html2canvas(target, {
+        scale, useCORS: true, logging: false,
+        backgroundColor: getComputedStyle(document.body).backgroundColor,
+        ignoreElements: el => el.id === 'toast' || el.classList.contains('exit-preview') || el.classList.contains('backdrop') || el.classList.contains('drop-overlay'),
+        onclone: prepareSnapshotClone,
+      });
+      canvas._scale = scale;
+      return canvas;
+    } finally {
+      hiddenForSnap.forEach(([el, display]) => { el.style.display = display; });
+      if (!wasPreview) document.body.classList.remove('preview');
+      window.scrollTo(0, scrollY);
+    }
+  }
+  async function takeSnapshot(kind) {
+    closeModal('snapModal');
+    try {
+      const canvas = await captureCanvas();
+      const base = `${((profile.username || 'instagram') + '-instagram').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'snapshot'}-${todayISO()}`;
+      if (kind === 'png') {
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        await offerFile(`${base}.png`, blob);
+      } else {
+        await loadScript(SNAP_LIBS.jspdf);
+        const { jsPDF } = window.jspdf;
+        let w = canvas.width / canvas._scale * 0.75, h = canvas.height / canvas._scale * 0.75; // CSS px to points
+        const fit = Math.min(1, 14400 / Math.max(w, h)); // PDF pages max out at 14,400 pt
+        w *= fit; h *= fit;
+        const pdf = new jsPDF({ orientation: w > h ? 'landscape' : 'portrait', unit: 'pt', format: [w, h], compress: true });
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, w, h);
+        await offerFile(`${base}.pdf`, pdf.output('blob'));
+      }
+      toast('Snapshot saved.');
+    } catch (err) {
+      const code = err && err.code;
+      toast(
+        err && err.message === 'script_load' ? "Couldn't load the snapshot tool. Check your internet connection and try again." :
+        code === 'declined' ? 'Snapshot not saved.' :
+        code === 'rate_limited' ? 'A save prompt is already open. Finish that one first.' :
+        code ? "Saving files isn't available in this view. Open it in a browser to save a snapshot." :
+        "Couldn't take the snapshot. Try again, or reload the page first.", 7000);
+    }
+  }
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-open-snap]')) openModal('snapModal');
+    const b = e.target.closest('[data-snap]');
+    if (b) takeSnapshot(b.dataset.snap);
+  });
+
+  // ---------- Boot ----------
+  // A flag that's still set at the next launch means the last one never finished (e.g. the tab crashed).
+  let lastLaunchFailed = false;
+  try { lastLaunchFailed = localStorage.getItem('feed-planner-booting') === '1'; localStorage.setItem('feed-planner-booting', '1'); } catch {}
+  $('recover').hidden = !lastLaunchFailed;
+  // Closing or reloading normally isn't a crash, so clear the flag then too.
+  window.addEventListener('pagehide', () => { try { localStorage.removeItem('feed-planner-booting'); } catch {} });
+  $('recoverOk').addEventListener('click', () => { $('recover').hidden = true; });
+  $('recoverClear').addEventListener('click', e => confirmTap(e.currentTarget, 'Tap again to erase everything', () => {
+    try { localStorage.removeItem('feed-planner-booting'); } catch {}
+    const del = indexedDB.deleteDatabase('feed-planner');
+    del.onsuccess = del.onerror = del.onblocked = () => location.reload();
+  }));
+  (async () => {
+    try {
+      const [saved, savedOrder, savedProfile, savedSchedule, savedAvatar, savedSettings] = await Promise.all([
+        store.allPosts(), store.get('order'), store.get('profile'), store.get('schedule'), store.get('avatar'), store.get('settings'),
+      ]);
+      if (savedSettings) settings = { ...settings, ...savedSettings };
+      for (const p of saved) {
+        if (normalize(p)) savePost(p);
+        posts.set(p.id, p);
+      }
+      const known = new Set(posts.keys());
+      order = (savedOrder || []).filter(id => known.has(id));
+      for (const id of known) if (!order.includes(id)) order.unshift(id);
+      if (savedProfile) profile = { ...profile, ...savedProfile };
+      if (savedSchedule) schedule = { ...schedule, ...savedSchedule };
+      if (savedAvatar) avatarBlob = savedAvatar;
+    } catch {
+      toast("Saving isn't available in this browser. Your plan will reset on refresh.", 5000);
+    }
+    let tab = 'grid';
+    try { tab = localStorage.getItem('feed-planner-tab') || 'grid'; } catch {}
+    $('compressToggle').checked = settings.compress;
+    renderProfile();
+    renderScheduleInputs();
+    setTab(['grid', 'reels', 'schedule'].includes(tab) ? tab : 'grid');
+    render();
+    setTimeout(() => { try { localStorage.removeItem('feed-planner-booting'); } catch {} }, 4000);
+  })();
+})();
+</script>
+</body>
+</html>

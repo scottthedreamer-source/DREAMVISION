@@ -40,12 +40,23 @@ Everything is saved in the browser you use (IndexedDB), so it survives refreshes
 - **Paste list**: one post idea per line, or full drafts separated by a line with `---`.
 - Drag posts to reorder (top = newest), schedule, video compression and **Backup** work like the other previewers.
 
-## Clean screenshots (all three previewers)
+# TikTok Previewer
+
+`TikTok Previewer.html` is the Instagram planner rebuilt as a TikTok profile, so you can plan your TikTok grid before you post.
+
+- **TikTok profile layout**: centered profile photo, @handle with verified badge, **Following / Followers / Likes**, bio and link, with your name in the top bar. Click any of them to edit.
+- **Grid**: 3 columns of 3:4 covers, the way TikTok crops videos on a profile. Each cell can show a **view count** (type it in, e.g. "12.4K") and TikTok's red **Pinned** tag (TikTok allows 3 pins; you get a warning past that).
+- **Post types**: Video, Photo and Photo carousel (TikTok photo mode). **Paste list** works like the Instagram one: words like *carousel* or *photo* set the type; anything else becomes a video.
+- **Cover**: pick a frame from the video or upload your own cover image.
+- Drag to rearrange, schedule, video compression, **Backup**, **Preview** and **Snapshot** work like the other previewers. Preview swaps the planning buttons for TikTok's Follow / message buttons and shows the Reposts, Favorites and Liked tabs.
+- Its saved data is kept separately from the Instagram planner, so the two never mix.
+
+## Clean screenshots (all four previewers)
 
 - Banner buttons (Change banner, Remove, size label) only appear while the mouse is over the banner.
 - Click **Preview** (the eye icon) to hide every editing control: the toolbar, banner buttons, schedule date badges, "+ Add" cards, hints and editing outlines. Empty counts show as "0" and empty bio/link lines disappear, so the page looks like the real app. The Instagram Previewer swaps its planning buttons for Follow / Message.
 - Press **Esc** to leave Preview, or move the mouse to the top-right corner (tap the screen on a phone) to show an "Exit preview" button, which fades away again on its own.
 
-## Snapshots (all three previewers)
+## Snapshots (all four previewers)
 
 Click **Snapshot** (the camera icon) and choose **Image (PNG)** or **PDF**. The whole page is saved exactly as it looks in Preview, with no editing controls. Browsers save to your Downloads folder; to save straight to your Desktop, set your browser to ask where to save each download. The snapshot tools (html2canvas and jsPDF) load from cdnjs the first time you use them.

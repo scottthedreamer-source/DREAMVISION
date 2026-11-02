@@ -1,5 +1,5 @@
 const names=['The Opening Statement','Trouble Brewing','The Long Goodbye','Sneak Attack','Pocket Thunder','The Rumble','Brief but Bold','The Squeaky One','Loose Cannon','The Grand Finale'];
-const sounds=await fetch('sounds.json').then(r=>{if(!r.ok)throw Error('Sound collection unavailable');return r.json()});
+const sounds=await fetch('sounds.json?v=4').then(r=>{if(!r.ok)throw Error('Sound collection unavailable');return r.json()});
 const $=s=>document.querySelector(s);
 let selected=0,delay=15,context,source,interval,wake,token=0,busy=false;
 const buffers=new Map();

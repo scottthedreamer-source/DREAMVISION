@@ -9,3 +9,7 @@ From this directory, run `python3 -m http.server 8000`. Open the served page in 
 Select a sound, optionally preview it, choose 15/30/45/60 seconds, then tap **Let ’er rip!**. Cancel stops both scheduled and playing audio. Playback is scheduled on the Web Audio clock after a user gesture. Keep the browser foregrounded and the screen awake: mobile operating systems can suspend audio when locked or backgrounded. iPhone playback requests a media audio session and starts a silent HTML audio track during the initiating tap to help route Web Audio correctly. Turn off Silent Mode and raise media volume when checking sound. Screen wake lock is requested where supported on HTTPS, but is not guaranteed. Check device volume first.
 
 Only audio is shipped, not the private source videos. `sounds.json` maps each numbered upload to its MP3 and duration. Fonts use local fallbacks if Google Fonts is unavailable.
+
+## Audio cleanup
+
+Default playback uses `sounds/cleaned/luckey-01.mp3` through `luckey-10.mp3`. The original extracted MP3s remain in `sounds/lucky-01.mp3` through `lucky-10.mp3`. Cleaned copies were encoded directly from the uploaded videos, with a 30 Hz high-pass and moderate FFT noise reduction (10 dB maximum reduction, per-clip estimated noise floor, gain smoothing 6). No cuts, gates, pitch changes, or loudness boost were applied. This reduces steady background noise; it does not isolate overlapping voices or other foreground sounds. All ten outputs decode and retain their original durations. Subjective listening on the target phone remains necessary.

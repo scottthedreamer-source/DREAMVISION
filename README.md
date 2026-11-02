@@ -1,6 +1,6 @@
-# Lucky Thompson — Let ’er rip!
+# Luckey Thompson — Let ’er rip!
 
-A mobile-friendly soundboard featuring ten authentic Lucky Thompson recordings extracted from the supplied videos. Sound titles are editable working names in `app.js`; the audio is not synthesized or trimmed.
+A mobile-friendly soundboard featuring ten authentic Luckey Thompson recordings extracted from the supplied videos. Sound titles are editable working names in `app.js`; the audio is not synthesized or trimmed.
 
 ## Run
 
